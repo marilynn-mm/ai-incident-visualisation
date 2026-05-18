@@ -18,9 +18,20 @@ let ctx    = null;
 
 export function initCanvas(selector) {
   canvas = document.querySelector(selector);
-  canvas.width  = width;
-  canvas.height = height;
+  const dpr = window.devicePixelRatio || 1;
+
+  // set the drawing buffer to physical pixel size
+  canvas.width  = width  * dpr;
+  canvas.height = height * dpr;
+
+  // keep the display size in CSS pixels
+  canvas.style.width  = width  + 'px';
+  canvas.style.height = height + 'px';
+
   ctx = canvas.getContext('2d');
+
+  // scale all drawing operations to match
+  ctx.scale(dpr, dpr);
 }
 
 export function drawFrame(nodes, currentView) {

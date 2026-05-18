@@ -9,6 +9,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="css/reset.css">
   <link rel="stylesheet" href="css/bubble_chart.css">
+  
 </head>
 <body>
   <div class="container">
@@ -18,7 +19,20 @@
       <a href="#" id="year" class="button">Grants By Year</a>
     </div>
     <canvas id="vis"></canvas>
+    <div id="tooltip" style="
+        position: absolute;
+        display: none;
+        background: white;
+        border: 2px solid #000;
+        border-radius: 5px;
+        padding: 10px;
+        font-size: 12px;
+        pointer-events: none;
+        width: 240px;
+        z-index: 10;
+    "></div>
   </div>
+  
 
   <script type="module" src="src/main.js"></script>
 </body>

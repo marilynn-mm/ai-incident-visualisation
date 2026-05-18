@@ -21,7 +21,7 @@
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 import { loadData, createNodes } from './data.js';
 import { setupSimulation, groupBubbles, splitBubbles } from './simulation.js';
-import { initCanvas, drawFrame } from './renderer.js';
+import { initCanvas, drawFrame, getHoveredNode, toCanvasCoords } from './renderer.js';
 
 
 // module-level state
@@ -36,6 +36,7 @@ function init() {
     const myNodes = createNodes(rawData);
     setupSimulation(myNodes, function() { drawFrame(myNodes, currentView); });
     groupBubbles();
+    setupTooltip(myNodes);
   });
   setupButtons();
 }
@@ -59,6 +60,43 @@ function setupButtons() {
   });
 }
 
+function setupTooltip(myNodes) {
+  const canvasEl = document.querySelector('#vis');
+  const tooltip  = document.querySelector('#tooltip');
+
+  console.log('canvas element found:', canvasEl);
+  console.log('tooltip element found:', tooltip);
+  console.log('number of nodes:', myNodes.length);
+
+  canvasEl.addEventListener('mousemove', function(event) {
+    const { x, y } = toCanvasCoords(event);
+    const node = getHoveredNode(x, y, myNodes);
+
+    console.log('mouse at:', x, y, '| node found:', node ? node.name : 'none');
+
+    if (node) {
+      tooltip.style.display = 'block';
+      tooltip.style.left = (event.pageX + 12) + 'px';
+      tooltip.style.top  = (event.pageY - 28) + 'px';
+      tooltip.innerHTML  =
+        '<strong>' + node.name + '</strong><br/>' +
+        'Org: ' + node.org + '<br/>' +
+        'Amount: $' + addCommas(node.value) + '<br/>' +
+        'Year: ' + node.year;
+    } else {
+      tooltip.style.display = 'none';
+    }
+  });
+
+  canvasEl.addEventListener('mouseleave', function() {
+    tooltip.style.display = 'none';
+  });
+}
+
+function addCommas(n) {
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
 
 init();
+
 
