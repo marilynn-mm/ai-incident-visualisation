@@ -17,18 +17,11 @@
 
 export const TIMELINE_ERAS = [
   {
-    id: 'pre-regime',
-    label: 'Before the regime',
-    yearRange: [2008, 2014],
-    title: 'Before any regime (2008–2014)',
-    body: 'Fewer than one logged incident per month. The categories that will later dominate — facial recognition, machine learning — are barely visible. The corpus this small is a reminder of what got documented, not what happened.',
-  },
-  {
     id: 'ml-era',
     label: 'ML era',
     yearRange: [2015, 2018],
     title: 'Machine learning controversies (2015–2018)',
-    body: 'Recommendation systems, hiring algorithms, risk scoring. Machine learning accounts for ~30% of incidents in 2017. Facial recognition starts to climb; generative AI is essentially absent.',
+    body: 'The corpus begins here. Recommendation systems, hiring algorithms, risk scoring — machine learning accounts for ~30% of incidents in 2017. Facial recognition starts to climb; generative AI is essentially absent.',
   },
   {
     id: 'fr-peak',
@@ -84,15 +77,15 @@ export const SCENES = [
   {
     id: 'cluster',
     view: 'all',
-    title: '2,243 documented AI incidents',
-    body: 'Every dot is one incident in the AIAAIC database, coloured by its primary technology. The mix you see in this cluster is the cumulative landscape from 2008 through 2026.',
+    title: 'Over 2,200 documented AI incidents',
+    body: 'Every dot is one incident in the AIAAIC database from 2015 onward, coloured by its primary technology. The mix you see in this cluster is the cumulative landscape across the past decade.',
   },
   {
     id: 'tl-overview',
     view: 'timeline',
     eraIdx: -1,
     title: 'Technology regime change',
-    body: 'The same incidents organized by year. The shape tells the headline: a long slow climb dominated by machine learning and facial recognition, then a sharp regime change as generative AI displaces the prior landscape after 2022.',
+    body: 'The same incidents organized by year, 2015 through 2026. The shape tells the headline: a slow climb dominated by machine learning and facial recognition, then a sharp regime change as generative AI displaces the prior landscape after 2022.',
   },
   ...TIMELINE_ERAS.map((era, idx) => ({
     id: `tl-${era.id}`,
@@ -101,6 +94,22 @@ export const SCENES = [
     title: era.title,
     body: era.body,
   })),
+  {
+    id: 'tl-fatal',
+    view: 'timeline',
+    eraIdx: -1,
+    showFatalSpotlight: true,
+    title: 'Fatal AI incidents',
+    body: '127 incidents in the corpus involve loss of life — about 5.7% of the total. The count climbed to 25 in 2025, the highest on record, and was already 17 the year before. The harm field is only ~40% complete in recent years, so the real count is almost certainly higher.',
+  },
+  {
+    id: 'tl-accountability-line',
+    view: 'timeline',
+    eraIdx: -1,
+    showAccountabilityLine: true,
+    title: 'Governance hasn\'t scaled with the problem',
+    body: 'Layered over the volume curve: the share of incidents each year with any documented consequence. The line drops from 55% in 2015 to 15% in 2024, even as annual totals grow 20×. The partial recovery in 2025–26 is almost certainly reporting lag — consequences take time to be recorded — but the long-run direction is clear: enforcement isn\'t keeping pace.',
+  },
   {
     id: 'accountability',
     view: 'split',

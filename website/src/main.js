@@ -14,7 +14,7 @@
  */
 
 import { loadData, createNodes } from './data.js';
-import { setupSimulation, groupBubbles, splitByResponse, timelineLayout } from './simulation.js';
+import { setupSimulation, groupBubbles, splitByResponse, timelineLayout, fatalSpotlightLayout } from './simulation.js';
 import { initCanvas, drawFrame, getHoveredNode, toCanvasCoords } from './renderer.js';
 import { TECH_BUCKET_ORDER, TECH_BUCKET_LABELS, TECH_BUCKET_COLORS } from './tech_buckets.js';
 import { TIMELINE_ERAS, SCENES } from './narrative.js';
@@ -34,7 +34,11 @@ function init() {
     const myNodes = createNodes(rawData);
     redraw = () => {
       const scene = SCENES[currentSceneIdx];
-      drawFrame(myNodes, scene.view, currentEra(scene));
+      drawFrame(myNodes, scene.view, {
+        era: currentEra(scene),
+        showAccountabilityLine: scene.showAccountabilityLine === true,
+        showFatalSpotlight: scene.showFatalSpotlight === true,
+      });
     };
     setupSimulation(myNodes, redraw);
     applySceneLayout(SCENES[0]);
@@ -79,26 +83,33 @@ function setupStepper() {
   nextBtn.addEventListener('click', () => goToScene(currentSceneIdx + 1));
 }
 
+// A scene's "layout id" is what we compare to decide whether to re-fire a
+// layout function. Most scenes use their view, but timeline sub-scenes
+// that re-sort the histogram (fatal spotlight) get their own id so the
+// dispatcher sees the change.
+function layoutIdFor(scene) {
+  if (scene.showFatalSpotlight) return 'tl-fatal';
+  return scene.view;   // 'all' | 'timeline' | 'split'
+}
+
 function goToScene(idx) {
   if (idx < 0 || idx >= SCENES.length) return;
   const prev = SCENES[currentSceneIdx];
   const next = SCENES[idx];
   currentSceneIdx = idx;
 
-  if (prev.view !== next.view) {
+  if (layoutIdFor(prev) !== layoutIdFor(next)) {
     applySceneLayout(next);
   }
   renderScene();
 }
 
 function applySceneLayout(scene) {
-  if (scene.view === 'all') {
-    groupBubbles();
-  } else if (scene.view === 'split') {
-    splitByResponse();
-  } else if (scene.view === 'timeline') {
-    timelineLayout();
-  }
+  const id = layoutIdFor(scene);
+  if (id === 'all')        groupBubbles();
+  else if (id === 'split') splitByResponse();
+  else if (id === 'tl-fatal') fatalSpotlightLayout();
+  else if (id === 'timeline') timelineLayout();
 }
 
 function renderScene() {

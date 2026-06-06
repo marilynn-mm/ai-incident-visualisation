@@ -86,16 +86,29 @@ export function splitByResponse() {
  */
 export function timelineLayout() {
   const nodes = simulation.nodes();
-  computeTimelineTargets(nodes);
+  computeTimelineTargets(nodes, {});
+  applyTimelineForces();
+}
 
-  // Smooth entry: no positional snap. Dots ease from their current
-  // positions (cluster centre, accountability split, etc.) directly to
-  // (tx, ty), while the radius tween shrinks them from defaultRadius to
-  // timelineRadius over the same ticks. Equal x and y strengths so the
-  // motion reads as a coherent settle rather than a horizontal blast
-  // followed by vertical drift.
+// Same chart layout as timelineLayout, except fatal dots sink to the
+// bottom of each year column. Non-fatal dots restack above them, sorted
+// by tech bucket as usual. The simulation's force-based easing handles
+// the visual: fatal dots drift down, non-fatal drift up to fill in.
+export function fatalSpotlightLayout() {
+  const nodes = simulation.nodes();
+  computeTimelineTargets(nodes, { fatalFirst: true });
+  applyTimelineForces();
+}
+
+// Smooth entry: no positional snap. Dots ease from their current
+// positions (cluster centre, accountability split, etc.) directly to
+// (tx, ty), while the radius tween shrinks them from defaultRadius to
+// timelineRadius over the same ticks. Equal x and y strengths so the
+// motion reads as a coherent settle rather than a horizontal blast
+// followed by vertical drift.
+function applyTimelineForces() {
+  const nodes = simulation.nodes();
   nodes.forEach(d => { d.targetRadius = timelineRadius; });
-
   simulation.force('charge', null);
   simulation.force('x', d3.forceX().strength(0.05).x(d => d.tx));
   simulation.force('y', d3.forceY().strength(0.05).y(d => d.ty));
@@ -110,7 +123,7 @@ export function getYearAxis() {
 // Sentinel key for the rightmost column holding incidents with no year.
 const UNDATED = '__undated__';
 
-function computeTimelineTargets(nodes) {
+function computeTimelineTargets(nodes, opts = {}) {
   const realYears = Array.from(new Set(nodes.map(n => n.year)))
     .filter(y => Number.isFinite(y))
     .sort((a, b) => a - b);
@@ -149,6 +162,11 @@ function computeTimelineTargets(nodes) {
 
   byCol.forEach((colNodes, key) => {
     colNodes.sort((a, b) => {
+      if (opts.fatalFirst) {
+        // Fatal dots stack at the bottom of the column (lower row index).
+        if (a.isFatal && !b.isFatal) return -1;
+        if (!a.isFatal && b.isFatal) return 1;
+      }
       const ai = orderIdx.has(a.bucket) ? orderIdx.get(a.bucket) : TECH_BUCKET_ORDER.length;
       const bi = orderIdx.has(b.bucket) ? orderIdx.get(b.bucket) : TECH_BUCKET_ORDER.length;
       if (ai !== bi) return ai - bi;
@@ -169,5 +187,28 @@ function computeTimelineTargets(nodes) {
   // Clamp to top margin if any column overflows
   nodes.forEach(d => { if (d.ty < chartTop) d.ty = chartTop; });
 
-  yearAxis = { columnLabels, colCenters, chartBottom };
+  // Per-column accountability rate (fraction with has_consequence = True).
+  // Matches notebook cell 17: `dfy.groupby("year")["has_consequence"].mean()`.
+  // Stored as an array aligned with columnKeys/colCenters so the renderer
+  // can look up by column index without a Map lookup.
+  const accountabilityRate = columnKeys.map(key => {
+    const colNodes = byCol.get(key) || [];
+    if (colNodes.length === 0) return null;
+    const withConsequence = colNodes.filter(n => n.hasConsequence).length;
+    return withConsequence / colNodes.length;
+  });
+
+  // Mark columns that are likely affected by reporting lag (latest two
+  // real years plus the partial year). The renderer styles their points
+  // differently so the viewer sees why the line bounces back at the end.
+  const lagFlags = columnKeys.map((key, i) => {
+    if (key === UNDATED) return false;
+    // last two real years + the partial year if it's there
+    return i >= realYears.length - 2;
+  });
+
+  yearAxis = {
+    columnLabels, colCenters, chartBottom, chartTop,
+    accountabilityRate, lagFlags,
+  };
 }
