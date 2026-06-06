@@ -12,45 +12,40 @@
 
 // data.js
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
-
-// exported functions
+import { primaryTech } from './tech_buckets.js';
+import { defaultRadius } from './constants.js';
 
 export function loadData(callback) {
-  d3.csv('data/gates_money.csv', function(d) {
-    return {
-      id:           d.id,
-      total_amount: +d.total_amount,
-      grant_title:  d.grant_title,
-      organization: d.organization,
-      group:        d.group,
-      start_year:   d.start_year
-    };
+  d3.csv('data/aiaaic_cleaned.csv', function(d) {
+    return d;
   }).then(callback);
 }
 
 export function createNodes(rawData) {
-  const maxAmount = d3.max(rawData, d => +d.total_amount);
-
-  const radiusScale = d3.scalePow()
-    .exponent(0.5)
-    .range([2, 85])
-    .domain([0, maxAmount]);
-
   const myNodes = rawData.map(d => ({
-    id:     d.id,
-    radius: radiusScale(d.total_amount),
-    value:  d.total_amount,
-    name:   d.grant_title,
-    org:    d.organization,
-    group:  d.group,
-    year:   d.start_year,
-    x:      Math.random() * 900,
-    y:      Math.random() * 800
+    id:          d.aiaaic_id,
+    radius:      defaultRadius,            // starting radius; tween adjusts per view
+    value:       1,
+    name:        d.headline,
+    org:         d.deployer,
+    bucket:      primaryTech(d),           // tech bucket — drives colour in every view
+    rawTech:     d.technology,             // raw string, useful for the tooltip
+    year:        parseYear(d.year),        // number or null (undated)
+    hasResponse: d.has_response === 'True',
+    x:           Math.random() * 900,
+    y:           Math.random() * 800
   }));
-
-  myNodes.sort((a, b) => b.value - a.value);
 
   return myNodes;
 }
+
+function parseYear(raw) {
+  if (raw === undefined || raw === null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 
 

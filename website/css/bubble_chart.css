@@ -34,6 +34,96 @@ a, a:visited, a:active {
   margin-top: 10px;
 }
 
+#legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 12px;
+  color: #444;
+  margin: 4px 0 12px;
+  padding: 0;
+}
+
+#legend[hidden] {
+  display: none;
+}
+
+#scene-stepper {
+  width: 940px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 14px 18px 16px;
+  margin: 6px 0 16px;
+  background: #fafafa;
+  box-sizing: border-box;
+}
+
+#scene-stepper[hidden] {
+  display: none;
+}
+
+.scene-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.scene-arrow {
+  font-size: 14px;
+  width: 36px;
+  height: 30px;
+  border: 1px solid #bbb;
+  background: #fff;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.scene-arrow:hover:not(:disabled) {
+  background: #eee;
+}
+
+.scene-arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.scene-indicator {
+  font-size: 12px;
+  color: #666;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scene-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #222;
+}
+
+.scene-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #444;
+}
+
+#legend .swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#legend .swatch::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--swatch-color, #ccc);
+  display: inline-block;
+}
+
 .year {
   font-size: 21px;
   fill: #aaa;
