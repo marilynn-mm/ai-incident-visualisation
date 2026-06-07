@@ -6,8 +6,11 @@ import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 import {
   width, height, center, splitCenters, forceStrength,
   defaultRadius, timelineMargin, timelineRadius, timelineDotPitch,
+  vennRadius,
 } from './constants.js';
 import { TECH_BUCKET_ORDER } from './tech_buckets.js';
+import { buildTargetMap } from './consequence_buckets.js';
+import { buildResponseTargetMap } from './response_buckets.js';
 
 let simulation = null;
 let yearAxis = null;   // { years: number[], colCenters: number[] } — set by computeTimelineTargets
@@ -70,6 +73,35 @@ export function splitByResponse() {
   simulation.force('x', d3.forceX().strength(forceStrength).x(function(d) {
     return d.hasResponse ? splitCenters.responded.x : splitCenters.no_response.x;
   }));
+  simulation.alpha(1).restart();
+}
+
+// Consequence Venn view: each dot is pulled toward its consequenceRegion's
+// target point. Charge keeps dots inside a region from collapsing onto a
+// single pixel; the (tx, ty) targets do the heavy lifting of region
+// assignment. Background outlines and labels are drawn by the renderer.
+export function consequenceVennLayout() {
+  applyRegionForces(buildTargetMap(), d => d.consequenceRegion);
+}
+
+// Response split view: same mechanism as consequenceVennLayout, just with
+// a different region→target map.
+export function responseBubblesLayout() {
+  applyRegionForces(buildResponseTargetMap(), d => d.responseRegion);
+}
+
+function applyRegionForces(targets, regionKey) {
+  const nodes = simulation.nodes();
+  nodes.forEach(d => {
+    const t = targets.get(regionKey(d)) || { x: 470, y: 300 };
+    d.tx = t.x;
+    d.ty = t.y;
+    d.targetRadius = vennRadius;
+  });
+  simulation.force('charge', d3.forceManyBody().strength(d => -Math.pow(d.radius, 2) * 0.04));
+  simulation.force('x', d3.forceX().strength(0.08).x(d => d.tx));
+  simulation.force('y', d3.forceY().strength(0.08).y(d => d.ty));
+  simulation.velocityDecay(0.3);
   simulation.alpha(1).restart();
 }
 

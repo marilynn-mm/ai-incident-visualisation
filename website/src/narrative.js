@@ -111,9 +111,15 @@ export const SCENES = [
     body: 'Layered over the volume curve: the share of incidents each year with any documented consequence. The line drops from 55% in 2015 to 15% in 2024, even as annual totals grow 20×. The partial recovery in 2025–26 is almost certainly reporting lag — consequences take time to be recorded — but the long-run direction is clear: enforcement isn\'t keeping pace.',
   },
   {
-    id: 'accountability',
-    view: 'split',
-    title: 'The accountability gap',
-    body: 'Only 21% of incidents have any documented response. The same dots, regrouped: incidents on the right have a recorded response; those on the left don\'t. The right cluster is conspicuously smaller than the left.',
+    id: 'consequence-split',
+    view: 'venn-consequence',
+    title: 'Which incidents had consequences?',
+    body: 'Only 25% of the corpus has a documented consequence at all. Those that do split heavily into three categories: Litigation, Regulatory investigation, and Fine/settlement — a 3-circle Venn captures their overlap. Police investigation pairs with Litigation often enough (6 incidents) to deserve its own bridge cluster. Five more named categories trail behind, and the remaining ~95 incidents fall into a long-tail "Other" bucket.',
+  },
+  {
+    id: 'response-split',
+    view: 'response-bubbles',
+    title: 'Which incidents had a response?',
+    body: 'Watch where the dots come from: the 464 incidents with any documented response migrate to the "Has response" oval on the right — pulled from both the consequence and no-consequence groups. The 1,739 remaining dots settle into two clusters by their consequence status. The dominant response category, by a wide margin, is "System review / update" — meaning the most common organizational response to an AI harm is "we\'ll look into it."',
   },
 ];

@@ -5,6 +5,8 @@
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 import { width, height, splitLabels, timelineMargin } from './constants.js';
 import { TECH_BUCKET_COLORS } from './tech_buckets.js';
+import { VENN_LAYOUT } from './consequence_buckets.js';
+import { RESPONSE_LAYOUT } from './response_buckets.js';
 import { getYearAxis } from './simulation.js';
 
 
@@ -37,6 +39,10 @@ export function drawFrame(nodes, currentView, hints = {}) {
   const showLine  = currentView === 'timeline' && hints.showAccountabilityLine === true;
   const showFatal = currentView === 'timeline' && hints.showFatalSpotlight    === true;
 
+  // Background outlines need to be drawn BEFORE the dots so dots sit on top.
+  if (currentView === 'venn-consequence')   drawVennBackdrop();
+  if (currentView === 'response-bubbles')   drawResponseBackdrop();
+
   drawDots(nodes, currentView, hints, { showLine, showFatal });
 
   if (currentView === 'split') {
@@ -45,6 +51,12 @@ export function drawFrame(nodes, currentView, hints = {}) {
     drawYearAxis();
     if (showLine)  drawAccountabilityLine();
     if (showFatal) drawFatalCaption();
+  } else if (currentView === 'venn-consequence') {
+    drawVennLabels();
+    drawVennDisclaimer();
+  } else if (currentView === 'response-bubbles') {
+    drawResponseLabels();
+    drawResponseDisclaimer();
   }
 }
 
@@ -261,6 +273,193 @@ function drawAccountabilityLine() {
     ctx.textBaseline = 'top';
     ctx.fillText('reporting lag', last.x + 6, last.y + 6);
   }
+}
+
+
+// --- Consequence Venn (State 2) -------------------------------------------
+
+function drawVennBackdrop() {
+  const v = VENN_LAYOUT;
+
+  // No-consequence cluster — faint circle marking the boundary
+  outlineCircle(v.noConsequence, '#dddddd', 1);
+
+  // Has-consequence container — big oval encompassing all sub-clusters
+  outlineEllipse(v.hasConsequence, '#bbbbbb', 1.5);
+
+  // Three Venn circles (top categories) — solid colored outlines
+  outlineCircle(v.venn.lit,  '#3a80b8', 2);
+  outlineCircle(v.venn.reg,  '#16a085', 2);
+  outlineCircle(v.venn.fine, '#e6a23c', 2);
+
+  // Bridge (Lit + Police), dashed to read as "cross-category combo"
+  ctx.save();
+  ctx.setLineDash([4, 3]);
+  outlineCircle(v.bridge, '#888', 1.5);
+  ctx.restore();
+
+  // Side clusters and Other: NO background outlines. The dot clusters
+  // themselves form the visual shape; only labels mark them.
+}
+
+function outlineCircle(c, stroke, lineWidth) {
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, c.r, 0, 2 * Math.PI);
+  ctx.stroke();
+}
+
+function outlineEllipse(c, stroke, lineWidth) {
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, 2 * Math.PI);
+  ctx.stroke();
+}
+
+function drawVennLabels() {
+  const v = VENN_LAYOUT;
+
+  ctx.textBaseline = 'middle';
+
+  // No-consequence header above its cluster
+  labelHeader(v.noConsequence.x, v.noConsequence.y - v.noConsequence.r - 18,
+              v.noConsequence.label, `${v.noConsequence.count} incidents`, '#555');
+
+  // Has-consequence header above the oval
+  labelHeader(v.hasConsequence.x, v.hasConsequence.y - v.hasConsequence.ry - 18,
+              v.hasConsequence.label, `${v.hasConsequence.count} incidents`, '#444');
+
+  // Venn category labels — outside each circle, away from neighbors
+  labelOffset(v.venn.lit,  -1, -1, 'Litigation',               `${v.venn.lit.count}`,  '#3a80b8');
+  labelOffset(v.venn.reg,   1, -1, 'Regulatory investigation', `${v.venn.reg.count}`, '#16a085');
+  labelOffset(v.venn.fine,  0,  1, 'Fine / settlement',        `${v.venn.fine.count}`, '#e6a23c');
+
+  // Bridge label above
+  labelOffset(v.bridge, 0, -1, 'Lit + Police', `${v.bridge.count}`, '#666');
+
+  // Side clusters — labels to the right of each
+  v.sides.forEach(s => {
+    const labelX = s.target.x + s.r + 8;
+    const labelY = s.target.y;
+    ctx.textAlign = 'left';
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#444';
+    ctx.fillText(s.label, labelX, labelY - 4);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`${s.count}`, labelX, labelY + 8);
+  });
+
+  // Other — small label below cluster
+  ctx.textAlign = 'center';
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#666';
+  ctx.fillText(v.other.label, v.other.x, v.other.y + v.other.r + 12);
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#888';
+  ctx.fillText(`~${v.other.count}`, v.other.x, v.other.y + v.other.r + 25);
+}
+
+function labelHeader(x, y, title, sub, colour) {
+  ctx.textAlign = 'center';
+  ctx.fillStyle = colour;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(title, x, y);
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#888';
+  ctx.fillText(sub, x, y + 14);
+}
+
+// Label placed offset from a circle in direction (dx, dy) where each is -1/0/1
+function labelOffset(c, dx, dy, title, sub, colour) {
+  const offsetMag = c.r + 16;
+  const x = c.x + dx * offsetMag;
+  const y = c.y + dy * offsetMag;
+  ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+  ctx.fillStyle = colour;
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText(title, x, y);
+  ctx.fillStyle = '#888';
+  ctx.font = '10px sans-serif';
+  ctx.fillText(sub, x, y + 12);
+}
+
+function drawVennDisclaimer() {
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#888';
+  const lines = [
+    'Note: 36 incidents in the Venn also carry a less-common consequence (e.g. Incarceration, Legal warning)',
+    'not shown — they\'re placed by their highest-frequency partner. The same applies to the long-tail "Other" cluster.',
+  ];
+  lines.forEach((line, i) => ctx.fillText(line, 20, height - 30 + i * 12));
+}
+
+
+// --- Response bubbles (State 3) -------------------------------------------
+
+function drawResponseBackdrop() {
+  const r = RESPONSE_LAYOUT;
+
+  // Two no-response clusters (faint)
+  outlineCircle(r.noRespNoCons,  '#dddddd', 1);
+  outlineCircle(r.noRespHasCons, '#dddddd', 1);
+
+  // Has-response container oval
+  outlineEllipse(r.hasResponse, '#bbbbbb', 1.5);
+}
+
+function drawResponseLabels() {
+  const r = RESPONSE_LAYOUT;
+
+  ctx.textBaseline = 'middle';
+
+  // Each of the three top-level groups gets a header above its outline.
+  noRespHeader(r.noRespNoCons);
+  noRespHeader(r.noRespHasCons);
+
+  labelHeader(r.hasResponse.x, r.hasResponse.y - r.hasResponse.ry - 18,
+              r.hasResponse.label, `${r.hasResponse.count} incidents`, '#444');
+
+  // Each response bucket — label to the right of the cluster.
+  r.buckets.forEach(b => {
+    const labelX = b.target.x + b.r + 8;
+    const labelY = b.target.y;
+    ctx.textAlign = 'left';
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#444';
+    ctx.fillText(b.label, labelX, labelY - 4);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`${b.count}`, labelX, labelY + 8);
+  });
+}
+
+function noRespHeader(c) {
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#555';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText(c.label, c.x, c.y - c.r - 24);
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#888';
+  ctx.fillText(c.sublabel, c.x, c.y - c.r - 10);
+  ctx.font = '10px sans-serif';
+  ctx.fillText(`${c.count} incidents`, c.x, c.y - c.r + 2);
+}
+
+function drawResponseDisclaimer() {
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#888';
+  const lines = [
+    'Note: 22 incidents have multiple response types coded. They\'re placed by their highest-frequency response;',
+    'the secondary tag isn\'t shown. The "Policy / apology" bucket merges Policy review/update, Policy update, and Public apology.',
+  ];
+  lines.forEach((line, i) => ctx.fillText(line, 20, height - 30 + i * 12));
 }
 
 

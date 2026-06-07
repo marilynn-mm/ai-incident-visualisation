@@ -14,7 +14,7 @@
  */
 
 import { loadData, createNodes } from './data.js';
-import { setupSimulation, groupBubbles, splitByResponse, timelineLayout, fatalSpotlightLayout } from './simulation.js';
+import { setupSimulation, groupBubbles, splitByResponse, timelineLayout, fatalSpotlightLayout, consequenceVennLayout, responseBubblesLayout } from './simulation.js';
 import { initCanvas, drawFrame, getHoveredNode, toCanvasCoords } from './renderer.js';
 import { TECH_BUCKET_ORDER, TECH_BUCKET_LABELS, TECH_BUCKET_COLORS } from './tech_buckets.js';
 import { TIMELINE_ERAS, SCENES } from './narrative.js';
@@ -89,7 +89,7 @@ function setupStepper() {
 // dispatcher sees the change.
 function layoutIdFor(scene) {
   if (scene.showFatalSpotlight) return 'tl-fatal';
-  return scene.view;   // 'all' | 'timeline' | 'split'
+  return scene.view;   // 'all' | 'timeline' | 'split' | 'venn-consequence'
 }
 
 function goToScene(idx) {
@@ -106,10 +106,12 @@ function goToScene(idx) {
 
 function applySceneLayout(scene) {
   const id = layoutIdFor(scene);
-  if (id === 'all')        groupBubbles();
-  else if (id === 'split') splitByResponse();
-  else if (id === 'tl-fatal') fatalSpotlightLayout();
-  else if (id === 'timeline') timelineLayout();
+  if (id === 'all')                    groupBubbles();
+  else if (id === 'split')             splitByResponse();
+  else if (id === 'tl-fatal')          fatalSpotlightLayout();
+  else if (id === 'timeline')          timelineLayout();
+  else if (id === 'venn-consequence')  consequenceVennLayout();
+  else if (id === 'response-bubbles')  responseBubblesLayout();
 }
 
 function renderScene() {

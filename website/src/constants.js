@@ -32,6 +32,11 @@ export const timelineMargin = { top: 60, right: 40, bottom: 45, left: 60 };
 export const timelineRadius = 2.5;
 export const timelineDotPitch = 6;
 
+// Consequence Venn (State 2): dots small enough that 6-dot sub-clusters
+// still read as discrete clusters, large enough to be visible vs the
+// background circle outlines.
+export const vennRadius = 3.5;
+
 
 // //  examplar data splits 
 // export const yearCenters = {

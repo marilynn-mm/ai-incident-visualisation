@@ -12,6 +12,17 @@ The story this project tells is **"what we know and what we don't know about AI 
 
 ## Session log
 
+### 2026-06-07 — Accountability narrative: consequence Venn + response migration
+
+Built out the accountability narrative (Acts 2–3 in the arc) as two new scenes following the cluster:
+
+- **Notebook cells 19–23** added to `analysis/AIAAIC/explore.ipynb` with the category structure analysis that informed the design: 4-quadrant breakdown, per-category counts, multi-coding distribution, and within-row co-occurring pairs.
+- **State 2 (Scene 11) — consequence Venn**: classic 3-circle Venn of top categories (Litigation 272, Reg investigation 114, Fine/settlement 65) with proportional sizing, sized by √count. A small dashed bridge cluster between the Venn and the Police side cluster holds the 6 Litigation + Police pair incidents. Five more named side clusters and a long-tail "Other" cluster sit inside a big "Has consequence" oval container. All consequence sub-clusters live inside the oval; "No consequence" is a separate cluster on the left.
+- **State 3 (Scene 12) — response migration**: the transition is *not* a reset. The has-consequence Venn dissolves into a single undifferentiated cluster of has-cons-no-resp dots (417), the no-cons cluster shrinks by 328 (those that migrated right), and a new "Has response" oval appears on the right with 6 buckets inside. Result: three top-level groups visible — `no-cons + no-resp` (1,322), `has-cons + no-resp` (417), `has-response` (464).
+- **Response bucketing**: 6 buckets, no Venn (response is 94% single-coded so multi-coding visualization isn't justified). Policy review/update + Policy update + Public apology merged into one "Policy / apology" bucket (otherwise each was small enough to fall into Other). Top finding the layout surfaces: System review/update at 194 — "we'll look into it" is the most common organizational response.
+
+Pending: State 2 is functional but visually rough (user noted); State 3 layout positions need tuning once State 2 lands.
+
 ### 2026-06-06 — Tech regime pivot, scene stepper, fatal + accountability scenes
 
 The full narrative spine got built out in one extended session. Major moves:
@@ -28,15 +39,16 @@ Pending after this session: falling animation (current transition is a smooth ea
 
 ## Narrative arc
 
-The story unfolds as 11 scenes navigated with ◀ ▶, grouped into 4 acts:
+The story unfolds as 12 scenes navigated with ◀ ▶, grouped into 4 acts:
 
 | Act | Scenes | Status |
 |---|---|---|
 | 1. Anchor cases → cloud | (planned scene 0): introduce 3–4 hand-picked incidents, dissolve into the cluster | Not started |
-| 1b. Scale | Scene 1: cluster of ~2,200 dots colored by tech bucket | Done |
+| 1b. Scale (Accountability State 1) | Scene 1: cluster of ~2,200 dots colored by tech bucket | Done |
 | 2. Timeline by tech | Scene 2: overview · Scenes 3–8: six era walkthroughs (ML era → 2026 partial) · Scene 9: fatal incidents spotlight · Scene 10: accountability-rate line overlay | Done; copy is provisional |
-| 3. Accountability gap | Scene 11: response-based split into two clusters | Done; victim regroup deferred |
-| 4. Deep-dive (TBD) | Some specific accountability finding — needs to come from analysis, not be designed before the finding exists | Deferred |
+| 3a. Consequence (State 2) | Scene 11: 3-circle Venn (top categories) + dashed Lit∩Police bridge + 5 named side clusters + Other, all inside a "Has consequence" oval | Done; visually rough |
+| 3b. Response (State 3) | Scene 12: dots with response migrate to a new "Has response" oval; the rest split into "no cons + no resp" and "has cons + no resp" clusters | Done |
+| 4. Deep-dive (TBD) | Some specific accountability finding beyond States 2 and 3 — needs to come from analysis, not be designed before the finding exists | Deferred |
 
 ## Key design decisions
 
@@ -123,6 +135,39 @@ Navigation state collapsed to one variable: `currentSceneIdx`. The `SCENES` arra
 
 **View changes** (cluster → timeline, timeline → split) trigger the corresponding layout function. **Within-view scene changes** (era → era, era → fatal, fatal → accountability line) compare a derived `layoutIdFor(scene)` and re-fire the layout only if the layout id changed. So stepping between eras is free (just dimming + annotation), but entering/leaving the fatal scene re-sorts the histogram.
 
+### Accountability State 2 (Scene 11): consequence Venn + bridge + side clusters
+
+State 2 shows which incidents had documented consequences. The right side wraps every has-consequence dot in a single oval container; inside, the 553 dots are organized by what kind of consequence.
+
+**3-circle Venn for top categories.** Litigation (272), Regulatory investigation (114), and Fine/settlement (65) cover ~80% of all consequence tag mentions. A 3-circle Venn produces 7 readable regions; the next level up (4-circle) has 15 regions and isn't legible at this scale. Circle radii are sized by √count so visual area is proportional to incident count.
+
+**Bridge cluster for Lit + Police.** 6 incidents are coded with both Litigation and Police investigation — comparable in count to Lit∩Reg (13) and Reg∩Fine (17). Rather than dropping the co-occurrence into a disclaimer or expanding to a 4-circle Venn, we made it a small dashed circle between the Venn and the Police side cluster. Honest about the pattern, adds modest visual complexity.
+
+**5 named side clusters + Other.** Police investigation (31), Legislative complaint (11), Legal complaint (10), Legislator letter (10), Legal warning (9) are individually labeled because each has a distinct meaning. Everything below count 9 collapses into "Other consequences" (~95 dots) — the long tail across 50+ rare categories.
+
+**Encompassing oval container.** All consequence sub-clusters live inside a single elliptical outline labeled "Has consequence (553)". The oval reads as "these are all one group, organized internally" rather than "many competing shapes" — which the first iteration without the oval looked like.
+
+**Disclaimer for hidden partners.** 36 incidents in the Venn also have a lower-frequency consequence tag (e.g. Incarceration, Legal warning) — the visualization places them by their highest-frequency partner. Disclosed in the canvas footer.
+
+### Accountability State 3 (Scene 12): migration, not reset
+
+State 3 is the structurally interesting moment of the accountability narrative: the visualization does *not* reset between State 2 and State 3. Instead, the 464 dots with any documented response migrate from wherever they were in State 2 to a new "Has response" oval on the right. The 1,739 remaining dots stay roughly in place but settle into two clusters by their consequence status.
+
+**Three top-level groups in State 3:**
+- *No consequence · no response* (1,322): the no-cons cluster from State 2, minus the 328 that migrated right
+- *Has consequence · no response* (417): the contents of the State 2 Venn that didn't have a response, now collapsed into a single undifferentiated cluster (the Venn structure dissolves for these dots since consequence sub-types aren't the State 3 message)
+- *Has response* (464): new oval on the right with 6 sub-buckets
+
+**Why migration not reset.** The 6.2% overlap (136 incidents with both consequence and response) is what the narrative is *about*. A reset would lose this — viewers would see two unrelated splits. Migration shows the cross-flow: dots come from both sides into the response oval, and the rest split by consequence.
+
+**6 response buckets, no Venn or bridge.** Response is 94% single-coded. Multi-coding visualization machinery (Venn, bridge cluster) isn't justified by the data. Six simple cluster centers: System review/update (194), System termination (51), System suspension (41), Content/data removal (27), Policy / apology (32), Other responses (119).
+
+**Policy / apology merge.** Policy review/update (17), Policy update (15), and Public apology (14) are each individually small. Merging them into one "Policy / apology" bucket brings the cluster to 46 dots — comparable in size to other named buckets — and reads as a coherent "communications response" category. Disclosed in the canvas footer.
+
+**Disclaimer for multi-coded responses.** 22 incidents (~5% of has-response) lose a secondary response tag to priority placement. Same approach as State 2 — disclosed but not visualized.
+
+**Headline this design surfaces.** System review/update at 194 (42% of the has-response oval) is the dominant response by a wide margin. The most common organizational response to AI harm is "we'll look into it."
+
 ### Multi-victim representation (Scene 3): dot-matrix duplication
 
 301 of 809 harm_individual-coded incidents are tagged with multiple victim types. Provisional decision: in Scene 3, dots will appear in every category they touch, with a caption explaining the duplication. The visual inflation is itself the message.
@@ -164,35 +209,41 @@ Visual polish was paused to focus on narrative mechanism. When returning to it, 
 ## Implementation status snapshot
 
 Done:
-- Scene stepper mechanism (◀ ▶, 11 scenes, layout-id dispatch)
-- Cluster view (Scene 1): tech-colored bubble cloud, ~2,200 dots
+- Scene stepper mechanism (◀ ▶, 12 scenes, layout-id dispatch)
+- Cluster view (Scene 1): tech-colored bubble cloud, ~2,200 dots (State 1 of accountability narrative)
 - Timeline overview (Scene 2): stacked histogram by year, tech-bucket palette, 12 year columns + Undated
 - Era walkthrough (Scenes 3–8): 6 eras with dimming and notebook-grounded annotation copy
 - Fatal incidents spotlight (Scene 9): re-sorts column so fatal dots cluster at bottom, gray-ghosted non-fatal background, "25 in 2025" canvas caption
 - Accountability-rate line overlay (Scene 10): per-year `has_consequence` line over dimmed histogram, dashed lag tail
-- Accountability gap split (Scene 11): two-cluster regroup by `has_response`
+- Accountability State 2 (Scene 11): 3-circle Venn (Litigation, Reg investigation, Fine/settlement) sized by √count + dashed Lit∩Police bridge + 5 named side clusters (Police investigation, Legislative complaint, Legal complaint, Legislator letter, Legal warning) + Other long-tail, all inside a "Has consequence (553)" oval; "No consequence (1,650)" cluster on the left
+- Accountability State 3 (Scene 12): response migration design — `responseRegion()` splits no-response by consequence status, dots ease from State 2 positions into 3 top-level groups (`no-cons + no-resp` 1,322 · `has-cons + no-resp` 417 · `has-response` oval 464 with 6 sub-buckets including merged "Policy / apology")
 - Tech legend (always visible, 7 buckets)
 - Smooth radius + position transitions between all view changes
 - Year filter to 2015+ at the data layer
 - Tooltip with headline / org / tech / year
 - Mockup file (`website/mockup.html`) for cluster radius design exploration
-- Harm taxonomy preserved (`harm_buckets.js`, `HARM_TAXONOMY.md`) for Scene 3 future use
+- Notebook analysis cells 19–23 (`analysis/AIAAIC/explore.ipynb`): consequence/response category structure, 4-quadrant breakdown, per-tag multi-coding distribution, co-occurring pairs
+- Harm taxonomy preserved (`harm_buckets.js`, `HARM_TAXONOMY.md`) for future victim scene
 
 Pending:
+- State 2 visual polish (user flagged the current iteration as ugly; cluster positions, label placement, and the proportion of the oval need tuning)
+- State 3 cluster positions and label collisions
 - "Falling" entry animation (current transition is smooth force-ease; literal rain would need two-phase animation)
 - Scene 1 case-study sequence (anchor cases dissolving into the cluster)
-- Scene 3 victim regrouping (dot-matrix duplication, harm-bucket colors)
+- Future Scene 3 victim regrouping (dot-matrix duplication, harm-bucket colors)
 - Visual polish — cluster shrunk ~30% after the radius drop, page `<h1>` outdated, color palette refinement
 - Notebook-grounded copy refinement (era bodies are provisional)
 
 Source files (all under `website/src/`):
-- `main.js` — scene stepper, layout dispatch, tooltip
-- `data.js` — node creation, year filter, `isFatal` flag
+- `main.js` — scene stepper, layout dispatch (`layoutIdFor`), tooltip
+- `data.js` — node creation, year filter, `isFatal` flag, `consequenceRegion` + `responseRegion` fields
 - `narrative.js` — `TIMELINE_ERAS` and `SCENES`
-- `simulation.js` — d3 forces, `timelineLayout`, `fatalSpotlightLayout`, radius tween, year axis
-- `renderer.js` — `drawFrame`, accountability line, year axis labels, fatal caption
+- `simulation.js` — d3 forces, `timelineLayout`, `fatalSpotlightLayout`, `consequenceVennLayout`, `responseBubblesLayout`, radius tween, year axis
+- `renderer.js` — `drawFrame`, accountability line, year axis labels, fatal caption, Venn backdrop/labels/disclaimer, response backdrop/labels/disclaimer
 - `tech_buckets.js` — primary tech assignment, palette, stacking order
+- `consequence_buckets.js` — region assignment (Venn / bridge / sides / Other), VENN_LAYOUT, target map builder
+- `response_buckets.js` — region assignment (priority-based bucketing + no-cons/has-cons split for no-response), RESPONSE_LAYOUT, target map builder
 - `harm_buckets.js` — preserved for future victim scene
-- `constants.js` — radii, margins, force strength
+- `constants.js` — radii (`defaultRadius`, `timelineRadius`, `vennRadius`), margins, force strength
 
 
