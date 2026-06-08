@@ -4,10 +4,15 @@
 
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 import { width, height, splitLabels, timelineMargin } from './constants.js';
-import { TECH_BUCKET_COLORS } from './tech_buckets.js';
+import { TECH_BUCKET_COLORS, TECH_BUCKET_LABELS } from './tech_buckets.js';
 import { VENN_LAYOUT } from './consequence_buckets.js';
 import { RESPONSE_LAYOUT } from './response_buckets.js';
-import { getYearAxis } from './simulation.js';
+import {
+  QUADRANT_LAYOUT, QUADRANT_DIVIDERS, BREAKDOWN_BASELINE_Y,
+  CONS_BREAKDOWN_TARGETS, CONS_BREAKDOWN_ORDER,
+  RESP_BREAKDOWN_TARGETS, RESP_BREAKDOWN_ORDER,
+} from './quadrant_buckets.js';
+import { getYearAxis, getQuadrantStats } from './simulation.js';
 
 
 // Every view uses the tech bucket palette, so colour stays consistent as
@@ -42,6 +47,9 @@ export function drawFrame(nodes, currentView, hints = {}) {
   // Background outlines need to be drawn BEFORE the dots so dots sit on top.
   if (currentView === 'venn-consequence')   drawVennBackdrop();
   if (currentView === 'response-bubbles')   drawResponseBackdrop();
+  if (currentView === 'quadrant')           drawQuadrantBackdrop();
+  if (currentView === 'cons-breakdown' ||
+      currentView === 'resp-breakdown')     drawBreakdownBaseline();
 
   drawDots(nodes, currentView, hints, { showLine, showFatal });
 
@@ -57,6 +65,15 @@ export function drawFrame(nodes, currentView, hints = {}) {
   } else if (currentView === 'response-bubbles') {
     drawResponseLabels();
     drawResponseDisclaimer();
+  } else if (currentView === 'quadrant') {
+    drawQuadrantLabels();
+    if (hints.showQuadrantTech) drawQuadrantTechAnnotations();
+  } else if (currentView === 'cons-breakdown') {
+    drawBreakdownLabels(CONS_BREAKDOWN_ORDER, CONS_BREAKDOWN_TARGETS,
+                        'Consequence types', 'Each dot in the right column moved to its primary consequence category.');
+  } else if (currentView === 'resp-breakdown') {
+    drawBreakdownLabels(RESP_BREAKDOWN_ORDER, RESP_BREAKDOWN_TARGETS,
+                        'Response types', 'Each dot in the top row moved to its primary response category.');
   }
 }
 
@@ -79,6 +96,9 @@ function drawDots(nodes, currentView, hints, { showLine, showFatal }) {
     } else if (showLine) {
       alpha  = lineSceneAlpha;
       colour = fillFor(d);
+    } else if (hints.dimRule) {
+      alpha  = shouldDim(d, hints.dimRule) ? dimmedAlpha : 1;
+      colour = fillFor(d);
     } else {
       const inEra = isInEra(d, currentView, hints.era);
       alpha  = inEra ? 1 : dimmedAlpha;
@@ -90,7 +110,9 @@ function drawDots(nodes, currentView, hints, { showLine, showFatal }) {
     ctx.arc(d.x, d.y, d.radius, 0, 2 * Math.PI);
     ctx.fillStyle = colour;
     ctx.fill();
-    if (currentView !== 'timeline') {
+    // Stroke only the larger dots — at radius ≤ 3 the 1px stroke takes
+    // up too much of the dot and reads as a ring rather than a darker edge.
+    if (d.radius > 3) {
       ctx.strokeStyle = d3.color(colour).darker().toString();
       ctx.lineWidth = 1;
       ctx.stroke();
@@ -128,6 +150,16 @@ function isInEra(d, currentView, currentEra) {
   if (d.year == null) return false;
   const [start, end] = currentEra.yearRange;
   return d.year >= start && d.year <= end;
+}
+
+// Quadrant-Act dim rules. Each rule names which dots are "dim" (true = dim).
+function shouldDim(d, rule) {
+  switch (rule) {
+    case 'no-cons':     return !d.hasConsequence;
+    case 'no-resp':     return !d.hasResponse;
+    case 'not-neither': return d.quadrant !== 'neither';
+    default:            return false;
+  }
 }
 
 export function getHoveredNode(mouseX, mouseY, nodes) {
@@ -492,4 +524,176 @@ function drawYearAxis() {
     if (!isFirst && !isLast && !isUndated && i % labelEvery !== 0) return;
     ctx.fillText(label, colCenters[i], labelY);
   });
+}
+
+
+// --- Quadrant Act (Scenes Q1–Q5) ------------------------------------------
+
+// Dividers + axis edge labels. faded=true draws the same grid at low alpha
+// for Q3/Q4 breakdowns, where the grid is just a reminder of the source.
+function drawQuadrantBackdrop({ faded = false } = {}) {
+  const { x: dx, y: dy } = QUADRANT_DIVIDERS;
+
+  ctx.save();
+  ctx.strokeStyle = faded ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(dx, 30);
+  ctx.lineTo(dx, height - 30);
+  ctx.moveTo(40, dy);
+  ctx.lineTo(width - 40, dy);
+  ctx.stroke();
+  ctx.restore();
+
+  // Axis edge labels — "← No consequence | Has consequence →" and same for response
+  if (faded) return;
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  ctx.textBaseline = 'middle';
+
+  // X-axis (consequence) — labels just below the horizontal divider
+  ctx.textAlign = 'right';
+  ctx.fillText('← No consequence', dx - 10, dy + 14);
+  ctx.textAlign = 'left';
+  ctx.fillText('Has consequence →', dx + 10, dy + 14);
+
+  // Y-axis (response) — labels just right of the vertical divider
+  ctx.textAlign = 'left';
+  ctx.fillText('↑ Has response', dx + 8, dy - 12);
+  ctx.fillText('↓ No response',  dx + 8, dy + 30);
+}
+
+function drawQuadrantLabels() {
+  const stats = getQuadrantStats();
+  if (!stats) return;
+
+  // Corner positions for each quadrant's title + % label. Pushed to the
+  // outer corners so they don't fight with the dot clusters.
+  const corners = {
+    'resp-only':  { x: 30,         y: 30,           align: 'left'  },
+    'both':       { x: width - 30, y: 30,           align: 'right' },
+    'neither':    { x: 30,         y: height - 70,  align: 'left'  },
+    'cons-only':  { x: width - 30, y: height - 70,  align: 'right' },
+  };
+
+  ctx.textBaseline = 'top';
+  for (const q in corners) {
+    const c = corners[q];
+    const { n, pct } = stats.percentages[q];
+    const label = QUADRANT_LAYOUT[q].label;
+    ctx.textAlign = c.align;
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(label, c.x, c.y);
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillStyle = '#222';
+    ctx.fillText(`${pct.toFixed(1)}%`, c.x, c.y + 18);
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`n=${n}`, c.x, c.y + 42);
+  }
+}
+
+// Scene Q2: subtle ring around each quadrant's cluster + a side label
+// calling out which tech bucket dominates that quadrant.
+function drawQuadrantTechAnnotations() {
+  const stats = getQuadrantStats();
+  if (!stats) return;
+
+  // Approximate cluster radius from dot count — sqrt(n) * dot radius / packing.
+  // The constant is tuned visually; the rings are decorative, not precise.
+  const clusterRadius = (n) => Math.min(120, Math.max(20, Math.sqrt(n) * 3.0));
+
+  for (const q in QUADRANT_LAYOUT) {
+    const center = QUADRANT_LAYOUT[q];
+    const stat = stats.dominantTech[q];
+    if (!stat) continue;
+    const [topBucket, topCount] = stat.top;
+    const r = clusterRadius(stat.total);
+
+    // Soft ring around the cluster, coloured by the dominant bucket
+    ctx.save();
+    ctx.strokeStyle = TECH_BUCKET_COLORS[topBucket] || '#888';
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, r + 8, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+
+    // Annotation line + label outside the ring. Direction depends on
+    // which corner the quadrant sits in.
+    const isLeft = center.x < width / 2;
+    const isTop  = center.y < height / 2;
+    const labelX = isLeft ? center.x - (r + 60) : center.x + (r + 60);
+    const labelY = isTop  ? center.y - (r + 30) : center.y + (r + 30);
+
+    ctx.strokeStyle = TECH_BUCKET_COLORS[topBucket] || '#888';
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(center.x + (isLeft ? -1 : 1) * (r + 8),
+               center.y + (isTop  ? -1 : 1) * (r + 8) * 0.3);
+    ctx.lineTo(labelX, labelY);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = isLeft ? 'right' : 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = TECH_BUCKET_COLORS[topBucket] || '#666';
+    ctx.font = 'bold 12px sans-serif';
+    const techLabel = TECH_BUCKET_LABELS[topBucket] || topBucket;
+    const pct = (topCount / stat.total * 100).toFixed(0);
+    ctx.fillText(`${techLabel}`, labelX, labelY);
+    ctx.fillStyle = '#888';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(`${pct}% of this quadrant (${topCount})`, labelX, labelY + 12);
+  }
+}
+
+// Horizontal axis line under the bars, mirroring the timeline's year axis.
+function drawBreakdownBaseline() {
+  ctx.strokeStyle = '#bbb';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(60, BREAKDOWN_BASELINE_Y + 2);
+  ctx.lineTo(width - 30, BREAKDOWN_BASELINE_Y + 2);
+  ctx.stroke();
+}
+
+// Scene Q3 / Q4: category labels under each bar, like the timeline year axis.
+// Labels stagger vertically every other one so longer labels don't overlap.
+function drawBreakdownLabels(order, targets, sectionTitle, sectionSub) {
+  // Section header (top-left)
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#444';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText(sectionTitle, 20, 20);
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  ctx.fillText(sectionSub, 20, 38);
+
+  // Per-bar labels below the baseline. Stagger every other one ~12px lower
+  // to avoid horizontal collisions on the longer labels.
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  order.forEach((id, i) => {
+    const t = targets[id];
+    if (!t) return;
+    const labelY = BREAKDOWN_BASELINE_Y + 10 + (i % 2) * 14;
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#444';
+    ctx.fillText(t.label, t.x, labelY);
+  });
+
+  // Disclaimer
+  ctx.textAlign = 'left';
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#888';
+  ctx.fillText('Dots placed by primary (highest-priority) tag, then sorted by tech bucket so colors band horizontally — matching the timeline view.',
+               20, height - 14);
 }

@@ -11,9 +11,16 @@ import {
 import { TECH_BUCKET_ORDER } from './tech_buckets.js';
 import { buildTargetMap } from './consequence_buckets.js';
 import { buildResponseTargetMap } from './response_buckets.js';
+import {
+  QUADRANT_LAYOUT,
+  CONS_BREAKDOWN_TARGETS, RESP_BREAKDOWN_TARGETS,
+  BREAKDOWN_BASELINE_Y, BREAKDOWN_BAR_SUBCOLS, BREAKDOWN_BAR_PITCH,
+  quadrantPercentages, dominantTechPerQuadrant, assignQuadrantScatter,
+} from './quadrant_buckets.js';
 
 let simulation = null;
 let yearAxis = null;   // { years: number[], colCenters: number[] } — set by computeTimelineTargets
+let quadrantStats = null;  // { percentages, dominantTech } — computed once on first quadrant layout
 
 // charge function
 function charge(d) {
@@ -88,6 +95,112 @@ export function consequenceVennLayout() {
 // a different region→target map.
 export function responseBubblesLayout() {
   applyRegionForces(buildResponseTargetMap(), d => d.responseRegion);
+}
+
+
+// --- Quadrant Act (Q1–Q5) -------------------------------------------------
+// All five scenes use the timeline-style force profile (no repulsion, weak
+// forceX/forceY toward exact per-dot (tx, ty) targets). The "cluster" look
+// in Q1/Q2/Q5 comes from precomputed Vogel-spiral scatter positions
+// (d.quadrantTx, d.quadrantTy), not from forceManyBody.
+//
+// Q3 and Q4 swap the active-half dots from scatter positions to a bar grid
+// computed by computeBreakdownTargets (same stacking pattern as the
+// timeline view). Dim-half dots keep their quadrant scatter positions.
+
+export function quadrantLayout() {
+  ensureQuadrantStats();
+  const nodes = simulation.nodes();
+  nodes.forEach(d => {
+    d.tx = d.quadrantTx;
+    d.ty = d.quadrantTy;
+    d.targetRadius = timelineRadius;
+  });
+  applyTimelineForces();
+}
+
+export function consequenceBreakdownLayout() {
+  ensureQuadrantStats();
+  const nodes = simulation.nodes();
+  const activeNodes = nodes.filter(d => d.hasConsequence);
+  computeBreakdownTargets(activeNodes, d => d.primaryConsequence, CONS_BREAKDOWN_TARGETS);
+  // dim dots: stay parked at scatter positions
+  for (const d of nodes) {
+    if (!d.hasConsequence) {
+      d.tx = d.quadrantTx;
+      d.ty = d.quadrantTy;
+    }
+    d.targetRadius = timelineRadius;
+  }
+  applyTimelineForces();
+}
+
+export function responseBreakdownLayout() {
+  ensureQuadrantStats();
+  const nodes = simulation.nodes();
+  const activeNodes = nodes.filter(d => d.hasResponse);
+  computeBreakdownTargets(activeNodes, d => d.primaryResponse, RESP_BREAKDOWN_TARGETS);
+  for (const d of nodes) {
+    if (!d.hasResponse) {
+      d.tx = d.quadrantTx;
+      d.ty = d.quadrantTy;
+    }
+    d.targetRadius = timelineRadius;
+  }
+  applyTimelineForces();
+}
+
+// Same stacking pattern as computeTimelineTargets, but per consequence /
+// response category instead of per year. Each bar stacks UP from
+// BREAKDOWN_BASELINE_Y; within a row dots fill subCols sub-columns; within a
+// category dots are sorted by tech bucket so colors band horizontally.
+function computeBreakdownTargets(activeNodes, categoryKey, targets) {
+  const orderIdx = new Map(TECH_BUCKET_ORDER.map((b, i) => [b, i]));
+  const subCols = BREAKDOWN_BAR_SUBCOLS;
+  const pitch   = BREAKDOWN_BAR_PITCH;
+  const baseY   = BREAKDOWN_BASELINE_Y;
+
+  // group active dots by category
+  const byCategory = new Map();
+  for (const d of activeNodes) {
+    const cat = categoryKey(d);
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat).push(d);
+  }
+
+  byCategory.forEach((catNodes, cat) => {
+    const target = targets[cat];
+    if (!target) return;
+
+    catNodes.sort((a, b) => {
+      const ai = orderIdx.has(a.bucket) ? orderIdx.get(a.bucket) : TECH_BUCKET_ORDER.length;
+      const bi = orderIdx.has(b.bucket) ? orderIdx.get(b.bucket) : TECH_BUCKET_ORDER.length;
+      if (ai !== bi) return ai - bi;
+      return a.id.localeCompare(b.id);
+    });
+
+    catNodes.forEach((node, i) => {
+      const row    = Math.floor(i / subCols);
+      const subCol = i % subCols;
+      const offset = (subCol - (subCols - 1) / 2) * pitch;
+      node.tx = target.x + offset;
+      node.ty = baseY - row * pitch - timelineRadius;
+    });
+  });
+}
+
+function ensureQuadrantStats() {
+  if (quadrantStats) return;
+  const nodes = simulation.nodes();
+  assignQuadrantScatter(nodes);
+  quadrantStats = {
+    percentages:   quadrantPercentages(nodes),
+    dominantTech:  dominantTechPerQuadrant(nodes),
+  };
+}
+
+export function getQuadrantStats() {
+  return quadrantStats;
 }
 
 function applyRegionForces(targets, regionKey) {

@@ -14,7 +14,7 @@
  */
 
 import { loadData, createNodes } from './data.js';
-import { setupSimulation, groupBubbles, splitByResponse, timelineLayout, fatalSpotlightLayout, consequenceVennLayout, responseBubblesLayout } from './simulation.js';
+import { setupSimulation, groupBubbles, splitByResponse, timelineLayout, fatalSpotlightLayout, consequenceVennLayout, responseBubblesLayout, quadrantLayout, consequenceBreakdownLayout, responseBreakdownLayout } from './simulation.js';
 import { initCanvas, drawFrame, getHoveredNode, toCanvasCoords } from './renderer.js';
 import { TECH_BUCKET_ORDER, TECH_BUCKET_LABELS, TECH_BUCKET_COLORS } from './tech_buckets.js';
 import { TIMELINE_ERAS, SCENES } from './narrative.js';
@@ -38,6 +38,8 @@ function init() {
         era: currentEra(scene),
         showAccountabilityLine: scene.showAccountabilityLine === true,
         showFatalSpotlight: scene.showFatalSpotlight === true,
+        showQuadrantTech: scene.showQuadrantTech === true,
+        dimRule: scene.dimRule || null,
       });
     };
     setupSimulation(myNodes, redraw);
@@ -112,6 +114,9 @@ function applySceneLayout(scene) {
   else if (id === 'timeline')          timelineLayout();
   else if (id === 'venn-consequence')  consequenceVennLayout();
   else if (id === 'response-bubbles')  responseBubblesLayout();
+  else if (id === 'quadrant')          quadrantLayout();
+  else if (id === 'cons-breakdown')    consequenceBreakdownLayout();
+  else if (id === 'resp-breakdown')    responseBreakdownLayout();
 }
 
 function renderScene() {

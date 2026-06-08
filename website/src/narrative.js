@@ -110,16 +110,59 @@ export const SCENES = [
     title: 'Governance hasn\'t scaled with the problem',
     body: 'Layered over the volume curve: the share of incidents each year with any documented consequence. The line drops from 55% in 2015 to 15% in 2024, even as annual totals grow 20×. The partial recovery in 2025–26 is almost certainly reporting lag — consequences take time to be recorded — but the long-run direction is clear: enforcement isn\'t keeping pace.',
   },
+
+  // --- Quadrant Act (Q1–Q5) ----------------------------------------------
+  // The 2×2 of consequence × response, then a tech overlay, then breakdown
+  // by consequence type, by response type, and finally a focus on the
+  // "neither" cluster (60% of incidents). Axes: x = consequence, y = response.
+  {
+    id: 'q1-quadrant',
+    view: 'quadrant',
+    title: 'Two questions, four outcomes',
+    body: 'Two yes/no questions about each incident — did anything formal happen (consequence) and did the organization say anything (response)? Crossing them produces a 2×2. The sizes are blunt: the "neither" quadrant is six in ten incidents.',
+  },
+  {
+    id: 'q2-quadrant-tech',
+    view: 'quadrant',
+    showQuadrantTech: true,
+    title: 'Different tech, different fates',
+    body: 'Each quadrant has a dominant technology. The mix isn\'t even — the kind of AI involved is part of what determines which quadrant an incident lands in.',
+  },
+  {
+    id: 'q3-cons-breakdown',
+    view: 'cons-breakdown',
+    dimRule: 'no-cons',
+    title: 'When there is a consequence, what kind?',
+    body: 'The right column (incidents with a documented consequence) splits along the x-axis by the type of consequence. Litigation is by far the dominant category — most "consequence" in this database is a lawsuit, not a fine or a regulatory action.',
+  },
+  {
+    id: 'q4-resp-breakdown',
+    view: 'resp-breakdown',
+    dimRule: 'no-resp',
+    title: 'When there is a response, what kind?',
+    body: 'The top row (incidents with a documented response) splits along the x-axis by response type. "System review / update" dominates — the modal organizational response to an AI harm is "we\'ll look into it," not termination or apology.',
+  },
+  {
+    id: 'q5-neither',
+    view: 'quadrant',
+    dimRule: 'not-neither',
+    title: 'The black hole',
+    body: '1,322 incidents — 60% of the corpus — have no documented consequence and no documented response. They were reported, catalogued, and then nothing more happened that the database could record.',
+  },
+
   {
     id: 'consequence-split',
     view: 'venn-consequence',
     title: 'Which incidents had consequences?',
     body: 'Only 25% of the corpus has a documented consequence at all. Those that do split heavily into three categories: Litigation, Regulatory investigation, and Fine/settlement — a 3-circle Venn captures their overlap. Police investigation pairs with Litigation often enough (6 incidents) to deserve its own bridge cluster. Five more named categories trail behind, and the remaining ~95 incidents fall into a long-tail "Other" bucket.',
   },
+
+  /* Commented out for now — superseded by the Quadrant Act above.
   {
     id: 'response-split',
     view: 'response-bubbles',
     title: 'Which incidents had a response?',
     body: 'Watch where the dots come from: the 464 incidents with any documented response migrate to the "Has response" oval on the right — pulled from both the consequence and no-consequence groups. The 1,739 remaining dots settle into two clusters by their consequence status. The dominant response category, by a wide margin, is "System review / update" — meaning the most common organizational response to an AI harm is "we\'ll look into it."',
   },
+  */
 ];

@@ -15,6 +15,7 @@ import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 import { primaryTech } from './tech_buckets.js';
 import { consequenceRegion } from './consequence_buckets.js';
 import { responseRegion } from './response_buckets.js';
+import { quadrantOf, primaryConsequence, primaryResponse } from './quadrant_buckets.js';
 import { defaultRadius } from './constants.js';
 
 export function loadData(callback) {
@@ -47,6 +48,9 @@ export function createNodes(rawData) {
     isFatal:        isFatal(d),
     consequenceRegion: consequenceRegion(d),
     responseRegion:    responseRegion(d),
+    quadrant:           quadrantOf(d),
+    primaryConsequence: primaryConsequence(d),
+    primaryResponse:    primaryResponse(d),
     x:           Math.random() * 900,
     y:           Math.random() * 800
   }));
