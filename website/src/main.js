@@ -14,10 +14,10 @@
  */
 
 import { loadData, createNodes } from './data.js';
-import { setupSimulation, groupBubbles, splitByResponse, timelineLayout, fatalSpotlightLayout, consequenceVennLayout, responseBubblesLayout, quadrantLayout, consequenceBreakdownLayout, responseBreakdownLayout } from './simulation.js';
+import { setupSimulation, groupBubbles, timelineLayout, fatalSpotlightLayout, quadrantLayout, consequenceBreakdownLayout, responseBreakdownLayout } from './simulation.js';
 import { initCanvas, drawFrame, getHoveredNode, toCanvasCoords } from './renderer.js';
 import { TECH_BUCKET_ORDER, TECH_BUCKET_LABELS, TECH_BUCKET_COLORS } from './tech_buckets.js';
-import { TIMELINE_ERAS, SCENES } from './narrative.js';
+import { SCENES } from './narrative.js';
 
 
 // module-level state
@@ -36,7 +36,9 @@ function init() {
       const scene = SCENES[currentSceneIdx];
       drawFrame(myNodes, scene.view, {
         era: currentEra(scene),
+        techFilter: scene.techFilter || null,
         showAccountabilityLine: scene.showAccountabilityLine === true,
+        showResponseLine:       scene.showResponseLine       === true,
         showFatalSpotlight: scene.showFatalSpotlight === true,
         showQuadrantTech: scene.showQuadrantTech === true,
         dimRule: scene.dimRule || null,
@@ -54,7 +56,7 @@ function init() {
 function currentEra(scene) {
   if (scene.view !== 'timeline') return null;
   if (scene.eraIdx == null || scene.eraIdx < 0) return null;
-  return TIMELINE_ERAS[scene.eraIdx] || null;
+  // return TIMELINE_ERAS[scene.eraIdx] || null;
 }
 
 function buildLegend() {
@@ -109,11 +111,11 @@ function goToScene(idx) {
 function applySceneLayout(scene) {
   const id = layoutIdFor(scene);
   if (id === 'all')                    groupBubbles();
-  else if (id === 'split')             splitByResponse();
+  // else if (id === 'split')             splitByResponse();
   else if (id === 'tl-fatal')          fatalSpotlightLayout();
   else if (id === 'timeline')          timelineLayout();
-  else if (id === 'venn-consequence')  consequenceVennLayout();
-  else if (id === 'response-bubbles')  responseBubblesLayout();
+  // else if (id === 'venn-consequence')  consequenceVennLayout();
+  // else if (id === 'response-bubbles')  responseBubblesLayout();
   else if (id === 'quadrant')          quadrantLayout();
   else if (id === 'cons-breakdown')    consequenceBreakdownLayout();
   else if (id === 'resp-breakdown')    responseBreakdownLayout();

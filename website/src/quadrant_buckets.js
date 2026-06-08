@@ -22,7 +22,7 @@ export function quadrantOf(row) {
 }
 
 
-// --- Quadrant centers (Scene Q1, Q2, Q5) ----------------------------------
+// --- Quadrant centers --------------------------------------------------
 // Canvas is 940 × 600. neither holds ≈1322 dots so its center is pushed
 // slightly toward the bottom-left corner to give the cluster room. The
 // quadrant dividers are still at the canvas midlines (x=470, y=300).
@@ -36,11 +36,15 @@ export const QUADRANT_LAYOUT = {
 
 export const QUADRANT_DIVIDERS = { x: 470, y: 300 };
 
-// Bar layout for Scenes Q3 / Q4. Bars stack UP from BREAKDOWN_BASELINE_Y,
+// Bar layout. Bars stack UP from VERTICAL_BAR_BASELINE_Y,
 // matching the timeline view's chartBottom convention.
-export const BREAKDOWN_BASELINE_Y = 540;
-export const BREAKDOWN_BAR_SUBCOLS = 4;
-export const BREAKDOWN_BAR_PITCH   = 5;   // matches timelineDotPitch
+export const VERTICAL_BAR_BASELINE_Y = 300;
+export const VERTICAL_BAR_SUBCOLS = 4;
+export const VERTICAL_BAR_PITCH   = 7;   // matches timelineDotPitch
+
+export const HORIZONTAL_BAR_LEFT_X = 470;   // where bars start; left of this 
+export const HORIZONTAL_BAR_SUBROWS = 4;    // sub-rows per lane (subcols rotated 90°)                                                        
+export const HORIZONTAL_BAR_PITCH   = 7;
 
 
 // --- Shared tag parser ----------------------------------------------------
@@ -51,7 +55,7 @@ function tagset(raw) {
 }
 
 
-// --- Consequence breakdown (Scene Q3) -------------------------------------
+// --- Consequence breakdown ------------------------------------
 // Each row with hasConsequence=true gets a single primary consequence tag
 // (priority = frequency). Used to spread the right column horizontally.
 
@@ -75,19 +79,22 @@ export function primaryConsequence(row) {
   return 'other-cons';
 }
 
-// Horizontal layout: bar center x per category. Each bar stacks UP from
-// BREAKDOWN_BASELINE_Y. y is computed per-dot by computeBreakdownTargets.
-export const CONS_BREAKDOWN_TARGETS = {
-  'litigation':            { x: 124, label: 'Litigation' },
-  'regulatory':            { x: 213, label: 'Regulatory inv.' },
-  'fine':                  { x: 302, label: 'Fine / settlement' },
-  'police':                { x: 391, label: 'Police inv.' },
-  'legal-complaint':       { x: 480, label: 'Legal complaint' },
-  'legislative-complaint': { x: 569, label: 'Legislative complaint' },
-  'legislator-letter':     { x: 658, label: 'Legislator letter' },
-  'legal-warning':         { x: 747, label: 'Legal warning' },
-  'other-cons':            { x: 836, label: 'Other' },
-};
+// slot_height  = (canvas_height − top_margin − bottom_margin) / N               
+//              = (600 − 60 − 60) / 9 ≈ 53                                       
+// y_center     = top_margin + slot_height × (i + 0.5)
+//              = 87, 140, 193, 247, 300, 353, 407, 460, 513   -- rounded
+
+export const CONS_BREAKDOWN_TARGETS = {                   
+  'litigation':            { y:  80, label: 'Litigation' },
+  'regulatory':            { y: 130, label: 'Regulatory inv.' },              
+  'fine':                  { y: 180, label: 'Fine / settlement' },
+  'police':                { y: 230, label: 'Police inv.' },                  
+  'legal-complaint':       { y: 280, label: 'Legal complaint' },
+  'legislative-complaint': { y: 330, label: 'Legislative complaint' },        
+  'legislator-letter':     { y: 380, label: 'Legislator letter' },
+  'legal-warning':         { y: 430, label: 'Legal warning' },                
+  'other-cons':            { y: 480, label: 'Other' },    
+};  
 
 export const CONS_BREAKDOWN_ORDER = [
   'litigation', 'regulatory', 'fine', 'police',
@@ -96,7 +103,7 @@ export const CONS_BREAKDOWN_ORDER = [
 ];
 
 
-// --- Response breakdown (Scene Q4) ----------------------------------------
+// --- Response breakdown ----------------------------------------
 
 const RESP_PRIORITY = [
   { id: 'sys-review',      tags: ['System review/update'] },
@@ -116,14 +123,18 @@ export function primaryResponse(row) {
   return 'other-resp';
 }
 
+// slot_height  = (canvas_width − left_margin − right_margin) / N               
+//              = 800 / 9 ≈ 88.9 px                                     
+// x_center     = 80 + 88.9 × (0.5, 1.5, 2.5, …, 8.5)..
+
 export const RESP_BREAKDOWN_TARGETS = {
-  'sys-review':      { x: 137, label: 'System review / update' },
-  'sys-termination': { x: 251, label: 'System termination' },
+  'sys-review':      { x: 135, label: 'System review / update' },
+  'sys-termination': { x: 250, label: 'System termination' },
   'sys-suspension':  { x: 365, label: 'System suspension' },
   'content-removal': { x: 480, label: 'Content / data removal' },
-  'policy-update':   { x: 594, label: 'Policy update' },
-  'public-apology':  { x: 708, label: 'Public apology' },
-  'other-resp':      { x: 822, label: 'Other' },
+  'policy-update':   { x: 595, label: 'Policy update' },
+  'public-apology':  { x: 710, label: 'Public apology' },
+  'other-resp':      { x: 820, label: 'Other' },
 };
 
 export const RESP_BREAKDOWN_ORDER = [
@@ -181,7 +192,7 @@ export function assignQuadrantScatter(nodes) {
 }
 
 
-// For Scene Q2: which tech bucket dominates each quadrant. Returns the top
+// For which tech bucket dominates each quadrant. Returns the top
 // bucket name + its count + the quadrant total, per quadrant id.
 export function dominantTechPerQuadrant(nodes) {
   const counts = {};

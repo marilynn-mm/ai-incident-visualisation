@@ -14,7 +14,8 @@ import { buildResponseTargetMap } from './response_buckets.js';
 import {
   QUADRANT_LAYOUT,
   CONS_BREAKDOWN_TARGETS, RESP_BREAKDOWN_TARGETS,
-  BREAKDOWN_BASELINE_Y, BREAKDOWN_BAR_SUBCOLS, BREAKDOWN_BAR_PITCH,
+  VERTICAL_BAR_BASELINE_Y, VERTICAL_BAR_SUBCOLS, VERTICAL_BAR_PITCH,
+  HORIZONTAL_BAR_LEFT_X, HORIZONTAL_BAR_SUBROWS, HORIZONTAL_BAR_PITCH,
   quadrantPercentages, dominantTechPerQuadrant, assignQuadrantScatter,
 } from './quadrant_buckets.js';
 
@@ -75,38 +76,35 @@ export function groupBubbles() {
   simulation.alpha(1).restart();
 }
 
-export function splitByResponse() {
-  restoreFreeForm();
-  simulation.force('x', d3.forceX().strength(forceStrength).x(function(d) {
-    return d.hasResponse ? splitCenters.responded.x : splitCenters.no_response.x;
-  }));
-  simulation.alpha(1).restart();
-}
+// export function splitByResponse() {
+//   restoreFreeForm();
+//   simulation.force('x', d3.forceX().strength(forceStrength).x(function(d) {
+//     return d.hasResponse ? splitCenters.responded.x : splitCenters.no_response.x;
+//   }));
+//   simulation.alpha(1).restart();
+// }
 
 // Consequence Venn view: each dot is pulled toward its consequenceRegion's
 // target point. Charge keeps dots inside a region from collapsing onto a
 // single pixel; the (tx, ty) targets do the heavy lifting of region
 // assignment. Background outlines and labels are drawn by the renderer.
-export function consequenceVennLayout() {
-  applyRegionForces(buildTargetMap(), d => d.consequenceRegion);
-}
+// export function consequenceVennLayout() {
+//   applyRegionForces(buildTargetMap(), d => d.consequenceRegion);
+// }
 
 // Response split view: same mechanism as consequenceVennLayout, just with
 // a different region→target map.
-export function responseBubblesLayout() {
-  applyRegionForces(buildResponseTargetMap(), d => d.responseRegion);
-}
+// export function responseBubblesLayout() {
+//   applyRegionForces(buildResponseTargetMap(), d => d.responseRegion);
+// }
 
 
-// --- Quadrant Act (Q1–Q5) -------------------------------------------------
+// --- Quadrant Act -------------------------------------------------
 // All five scenes use the timeline-style force profile (no repulsion, weak
-// forceX/forceY toward exact per-dot (tx, ty) targets). The "cluster" look
-// in Q1/Q2/Q5 comes from precomputed Vogel-spiral scatter positions
-// (d.quadrantTx, d.quadrantTy), not from forceManyBody.
+// forceX/forceY toward exact per-dot (tx, ty) targets).
 //
 // Q3 and Q4 swap the active-half dots from scatter positions to a bar grid
-// computed by computeBreakdownTargets (same stacking pattern as the
-// timeline view). Dim-half dots keep their quadrant scatter positions.
+// computed by computeVerticalBarTargets or computeHorizontalBarTargets
 
 export function quadrantLayout() {
   ensureQuadrantStats();
@@ -123,7 +121,7 @@ export function consequenceBreakdownLayout() {
   ensureQuadrantStats();
   const nodes = simulation.nodes();
   const activeNodes = nodes.filter(d => d.hasConsequence);
-  computeBreakdownTargets(activeNodes, d => d.primaryConsequence, CONS_BREAKDOWN_TARGETS);
+  computeHorizontalBarTargets(activeNodes, d => d.primaryConsequence, CONS_BREAKDOWN_TARGETS);
   // dim dots: stay parked at scatter positions
   for (const d of nodes) {
     if (!d.hasConsequence) {
@@ -139,7 +137,7 @@ export function responseBreakdownLayout() {
   ensureQuadrantStats();
   const nodes = simulation.nodes();
   const activeNodes = nodes.filter(d => d.hasResponse);
-  computeBreakdownTargets(activeNodes, d => d.primaryResponse, RESP_BREAKDOWN_TARGETS);
+  computeVerticalBarTargets(activeNodes, d => d.primaryResponse, RESP_BREAKDOWN_TARGETS);
   for (const d of nodes) {
     if (!d.hasResponse) {
       d.tx = d.quadrantTx;
@@ -150,15 +148,12 @@ export function responseBreakdownLayout() {
   applyTimelineForces();
 }
 
-// Same stacking pattern as computeTimelineTargets, but per consequence /
-// response category instead of per year. Each bar stacks UP from
-// BREAKDOWN_BASELINE_Y; within a row dots fill subCols sub-columns; within a
-// category dots are sorted by tech bucket so colors band horizontally.
-function computeBreakdownTargets(activeNodes, categoryKey, targets) {
+// Same stacking pattern as computeTimelineTargets, but per response category instead of per year
+function computeVerticalBarTargets(activeNodes, categoryKey, targets) {
   const orderIdx = new Map(TECH_BUCKET_ORDER.map((b, i) => [b, i]));
-  const subCols = BREAKDOWN_BAR_SUBCOLS;
-  const pitch   = BREAKDOWN_BAR_PITCH;
-  const baseY   = BREAKDOWN_BASELINE_Y;
+  const subCols = VERTICAL_BAR_SUBCOLS;
+  const pitch   = VERTICAL_BAR_PITCH;
+  const baseY   = VERTICAL_BAR_BASELINE_Y;
 
   // group active dots by category
   const byCategory = new Map();
@@ -188,6 +183,44 @@ function computeBreakdownTargets(activeNodes, categoryKey, targets) {
     });
   });
 }
+
+
+// Similar stacking pattern as computeTimelineTargets, but horizontal and per conseuqnece category
+function computeHorizontalBarTargets(activeNodes, categoryKey, targets) {
+  const orderIdx = new Map(TECH_BUCKET_ORDER.map((b, i) => [b, i]));
+  const subRows = HORIZONTAL_BAR_SUBROWS;
+  const pitch   = HORIZONTAL_BAR_PITCH;
+  const baseX   = HORIZONTAL_BAR_LEFT_X;
+
+  // group active dots by category
+  const byCategory = new Map();
+  for (const d of activeNodes) {
+    const cat = categoryKey(d);
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat).push(d);
+  }
+
+  byCategory.forEach((catNodes, cat) => {
+    const target = targets[cat];
+    if (!target) return;
+
+    catNodes.sort((a, b) => {
+      const ai = orderIdx.has(a.bucket) ? orderIdx.get(a.bucket) : TECH_BUCKET_ORDER.length;
+      const bi = orderIdx.has(b.bucket) ? orderIdx.get(b.bucket) : TECH_BUCKET_ORDER.length;
+      if (ai !== bi) return ai - bi;
+      return a.id.localeCompare(b.id);
+    });
+
+    catNodes.forEach((node, i) => {
+      const col    = Math.floor(i / subRows);
+      const subRow = i % subRows;
+      const offset = (subRow - (subRows - 1) / 2) * pitch;
+      node.tx = baseX + col * pitch + timelineRadius;
+      node.ty = target.y + offset;
+    });
+  });
+}
+
 
 function ensureQuadrantStats() {
   if (quadrantStats) return;
@@ -343,6 +376,14 @@ function computeTimelineTargets(nodes, opts = {}) {
     return withConsequence / colNodes.length;
   });
 
+  // Per-column response rate. Same shape — matches the accountability_patterns
+  // notebook's per-year cons + resp lines.
+  const responseRate = columnKeys.map(key => {
+    const colNodes = byCol.get(key) || [];
+    if (colNodes.length === 0) return null;
+    return colNodes.filter(n => n.hasResponse).length / colNodes.length;
+  });
+
   // Mark columns that are likely affected by reporting lag (latest two
   // real years plus the partial year). The renderer styles their points
   // differently so the viewer sees why the line bounces back at the end.
@@ -354,6 +395,6 @@ function computeTimelineTargets(nodes, opts = {}) {
 
   yearAxis = {
     columnLabels, colCenters, chartBottom, chartTop,
-    accountabilityRate, lagFlags,
+    accountabilityRate, responseRate, lagFlags,
   };
 }

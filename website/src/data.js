@@ -46,6 +46,17 @@ export function createNodes(rawData) {
     hasResponse:    d.has_response === 'True',
     hasConsequence: d.has_consequence === 'True',
     isFatal:        isFatal(d),
+    // Raw tech flags (for tech-filter narrative — multi-tech incidents
+    // like GenAI+Deepfake match BOTH filters)
+    isGenAI:        d.is_generative_ai      === 'True',
+    isML:           d.is_machine_learning   === 'True',
+    isFacial:       d.is_facial_recognition === 'True',
+    isDeepfake:     d.is_deepfake           === 'True',
+    isCV:           d.is_computer_vision    === 'True',
+    isAV:           d.is_self_driving_system === 'True',
+    // Raw harm strings for top-tag computation per tech
+    harmIndividual: d.harm_individual,
+    harmSocietal:   d.harm_societal,
     consequenceRegion: consequenceRegion(d),
     responseRegion:    responseRegion(d),
     quadrant:           quadrantOf(d),

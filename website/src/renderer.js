@@ -5,10 +5,12 @@
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 import { width, height, splitLabels, timelineMargin } from './constants.js';
 import { TECH_BUCKET_COLORS, TECH_BUCKET_LABELS } from './tech_buckets.js';
+import { TECH_FILTER_BY_ID, topHarmTagsForTech } from './tech_filters.js';
 import { VENN_LAYOUT } from './consequence_buckets.js';
 import { RESPONSE_LAYOUT } from './response_buckets.js';
 import {
-  QUADRANT_LAYOUT, QUADRANT_DIVIDERS, BREAKDOWN_BASELINE_Y,
+  QUADRANT_LAYOUT, QUADRANT_DIVIDERS,
+  VERTICAL_BAR_BASELINE_Y, HORIZONTAL_BAR_LEFT_X,
   CONS_BREAKDOWN_TARGETS, CONS_BREAKDOWN_ORDER,
   RESP_BREAKDOWN_TARGETS, RESP_BREAKDOWN_ORDER,
 } from './quadrant_buckets.js';
@@ -41,15 +43,17 @@ export function initCanvas(selector) {
 export function drawFrame(nodes, currentView, hints = {}) {
   ctx.clearRect(0, 0, width, height);
 
-  const showLine  = currentView === 'timeline' && hints.showAccountabilityLine === true;
-  const showFatal = currentView === 'timeline' && hints.showFatalSpotlight    === true;
+  const showConsLine = currentView === 'timeline' && hints.showAccountabilityLine === true;
+  const showRespLine = currentView === 'timeline' && hints.showResponseLine     === true;
+  const showLine     = showConsLine || showRespLine;
+  const showFatal    = currentView === 'timeline' && hints.showFatalSpotlight   === true;
 
   // Background outlines need to be drawn BEFORE the dots so dots sit on top.
-  if (currentView === 'venn-consequence')   drawVennBackdrop();
-  if (currentView === 'response-bubbles')   drawResponseBackdrop();
+  // if (currentView === 'venn-consequence')   drawVennBackdrop();
+  // if (currentView === 'response-bubbles')   drawResponseBackdrop();
   if (currentView === 'quadrant')           drawQuadrantBackdrop();
-  if (currentView === 'cons-breakdown' ||
-      currentView === 'resp-breakdown')     drawBreakdownBaseline();
+  if (currentView === 'cons-breakdown')     drawHorizontalBarBaseline();
+  if (currentView === 'resp-breakdown')     drawVerticalBarBaseline();
 
   drawDots(nodes, currentView, hints, { showLine, showFatal });
 
@@ -57,28 +61,31 @@ export function drawFrame(nodes, currentView, hints = {}) {
     drawSplitLabels();
   } else if (currentView === 'timeline') {
     drawYearAxis();
-    if (showLine)  drawAccountabilityLine();
+    if (showLine)  drawAccountabilityLines({ cons: showConsLine, resp: showRespLine });
     if (showFatal) drawFatalCaption();
-  } else if (currentView === 'venn-consequence') {
-    drawVennLabels();
-    drawVennDisclaimer();
-  } else if (currentView === 'response-bubbles') {
-    drawResponseLabels();
-    drawResponseDisclaimer();
+    if (hints.techFilter) drawTechHarmOverlay(nodes, hints.techFilter);
+  // } else if (currentView === 'venn-consequence') {
+  //   drawVennLabels();
+  //   drawVennDisclaimer();
+  // } else if (currentView === 'response-bubbles') {
+  //   drawResponseLabels();
+  //   drawResponseDisclaimer();
   } else if (currentView === 'quadrant') {
     drawQuadrantLabels();
-    if (hints.showQuadrantTech) drawQuadrantTechAnnotations();
+    // if (hints.showQuadrantTech) drawQuadrantTechAnnotations();
   } else if (currentView === 'cons-breakdown') {
-    drawBreakdownLabels(CONS_BREAKDOWN_ORDER, CONS_BREAKDOWN_TARGETS,
-                        'Consequence types', 'Each dot in the right column moved to its primary consequence category.');
+    drawQuadrantLabels();
+    drawHorizontalBarLabels(CONS_BREAKDOWN_ORDER, CONS_BREAKDOWN_TARGETS,
+                        'Consequence types', 'Incident with consequences reorganizes by its primary consequence category.');
   } else if (currentView === 'resp-breakdown') {
-    drawBreakdownLabels(RESP_BREAKDOWN_ORDER, RESP_BREAKDOWN_TARGETS,
-                        'Response types', 'Each dot in the top row moved to its primary response category.');
+    drawQuadrantLabels();
+    drawVerticalBarLabels(RESP_BREAKDOWN_ORDER, RESP_BREAKDOWN_TARGETS,
+                        'Response types', 'Incident with consequences reorganizes by its primary response category.');
   }
 }
 
 function drawDots(nodes, currentView, hints, { showLine, showFatal }) {
-  const dimmedAlpha    = 0.18;
+  const dimmedAlpha    = 0.3;   // raised from 0.18 so the histogram silhouette stays visible
   const lineSceneAlpha = 0.3;
   const fatalGhost     = 0.10;
 
@@ -98,6 +105,11 @@ function drawDots(nodes, currentView, hints, { showLine, showFatal }) {
       colour = fillFor(d);
     } else if (hints.dimRule) {
       alpha  = shouldDim(d, hints.dimRule) ? dimmedAlpha : 1;
+      colour = fillFor(d);
+    } else if (currentView === 'timeline' && hints.techFilter) {
+      const filter = TECH_FILTER_BY_ID[hints.techFilter];
+      const match  = filter && d[filter.flag];
+      alpha  = match ? 1 : dimmedAlpha;
       colour = fillFor(d);
     } else {
       const inEra = isInEra(d, currentView, hints.era);
@@ -189,35 +201,32 @@ function drawSplitLabels() {
   ctx.fillText('Response documented', splitLabels.responded.x, 40);
 }
 
-// Overlay the per-year consequence rate as a line chart over the histogram.
-// 0% at chartBottom, 100% at chartTop. Columns flagged as reporting-lag
-// affected get hollow markers + a dashed line segment so the viewer sees
-// why the line bounces back at the right edge.
-function drawAccountabilityLine() {
+// Overlay one or both rate lines (consequence / response) over the year
+// histogram. 0% at chartBottom, 100% at chartTop. Reporting-lag years get
+// hollow markers + a dashed segment. Notebook colors:
+//   cons = #c0392b (red), resp = #3a80b8 (blue).
+function drawAccountabilityLines({ cons = false, resp = false } = {}) {
   const axis = getYearAxis();
-  if (!axis || !axis.accountabilityRate) return;
+  if (!axis) return;
 
-  const { colCenters, chartBottom, chartTop, accountabilityRate, lagFlags } = axis;
+  drawRateAxisFrame(axis);
+
+  if (cons && axis.accountabilityRate) {
+    drawRateLine(axis, axis.accountabilityRate, '#c0392b', cons && !resp);
+  }
+  if (resp && axis.responseRate) {
+    // When both lines are shown, suppress endpoint labels on the second one
+    // so they don't overlap the first. Legend disambiguates the colors.
+    drawRateLine(axis, axis.responseRate, '#3a80b8', resp && !cons);
+  }
+  if (cons || resp) drawRateLegend(axis, { cons, resp });
+}
+
+// Gridlines + right-side % labels, drawn once even if both lines are shown.
+function drawRateAxisFrame(axis) {
+  const { colCenters, chartBottom, chartTop } = axis;
   const chartH = chartBottom - chartTop;
 
-  // Build a list of points where rate is non-null and the column has a real
-  // year label (skip the Undated column — accountability rate there isn't
-  // a meaningful "this year" data point).
-  const points = [];
-  for (let i = 0; i < colCenters.length; i++) {
-    const rate = accountabilityRate[i];
-    if (rate == null) continue;
-    if (axis.columnLabels[i] === 'Undated') continue;
-    points.push({
-      x: colCenters[i],
-      y: chartBottom - rate * chartH,
-      rate,
-      lag: lagFlags[i],
-    });
-  }
-  if (points.length === 0) return;
-
-  // 25% / 50% / 75% reference gridlines, faint
   ctx.strokeStyle = 'rgba(0,0,0,0.06)';
   ctx.lineWidth = 1;
   [0.25, 0.5, 0.75].forEach(frac => {
@@ -228,7 +237,6 @@ function drawAccountabilityLine() {
     ctx.stroke();
   });
 
-  // axis labels on the right (% with consequence)
   ctx.fillStyle = '#888';
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'left';
@@ -237,26 +245,40 @@ function drawAccountabilityLine() {
     const y = chartBottom - frac * chartH;
     ctx.fillText(`${Math.round(frac * 100)}%`, colCenters[colCenters.length - 1] + 14, y);
   });
+}
 
-  // line — solid through non-lag points, dashed across the lag tail
-  const stroke = '#c0392b';
+// Draw one rate series — solid line + dashed lag tail + markers.
+// `withEndpointLabels` controls whether first/last % labels are written
+// (only one line shows them when both are visible).
+function drawRateLine(axis, rates, stroke, withEndpointLabels) {
+  const { colCenters, chartBottom, chartTop, columnLabels, lagFlags } = axis;
+  const chartH = chartBottom - chartTop;
+
+  const points = [];
+  for (let i = 0; i < colCenters.length; i++) {
+    const rate = rates[i];
+    if (rate == null) continue;
+    if (columnLabels[i] === 'Undated') continue;
+    points.push({ x: colCenters[i], y: chartBottom - rate * chartH, rate, lag: lagFlags[i] });
+  }
+  if (points.length === 0) return;
+
   ctx.strokeStyle = stroke;
   ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
 
-  // solid segments
+  // solid segments through non-lag points
   ctx.setLineDash([]);
   ctx.beginPath();
   let inPath = false;
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
+  for (const p of points) {
     if (p.lag) { inPath = false; continue; }
     if (!inPath) { ctx.moveTo(p.x, p.y); inPath = true; }
     else ctx.lineTo(p.x, p.y);
   }
   ctx.stroke();
 
-  // dashed connector through the lag tail (joining last solid point to lag points)
+  // dashed tail through lag years
   const lastSolidIdx = points.findIndex(p => p.lag) - 1;
   if (lastSolidIdx >= 0) {
     ctx.setLineDash([4, 4]);
@@ -269,8 +291,8 @@ function drawAccountabilityLine() {
     ctx.setLineDash([]);
   }
 
-  // markers — solid filled circle for confirmed years, hollow for lag-affected
-  points.forEach(p => {
+  // markers
+  for (const p of points) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, 3.5, 0, 2 * Math.PI);
     if (p.lag) {
@@ -283,216 +305,246 @@ function drawAccountabilityLine() {
       ctx.fillStyle = stroke;
       ctx.fill();
     }
-  });
+  }
 
-  // endpoint labels: first solid + last solid, plus any lag-tail values
+  if (withEndpointLabels) {
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = stroke;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    const firstSolid = points.find(p => !p.lag);
+    const lastSolid  = [...points].reverse().find(p => !p.lag);
+    if (firstSolid) ctx.fillText(`${Math.round(firstSolid.rate * 100)}%`, firstSolid.x, firstSolid.y - 6);
+    if (lastSolid && lastSolid !== firstSolid)
+      ctx.fillText(`${Math.round(lastSolid.rate * 100)}%`, lastSolid.x, lastSolid.y - 6);
+
+    const last = points[points.length - 1];
+    if (last && last.lag) {
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#999';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('reporting lag', last.x + 6, last.y + 6);
+    }
+  }
+}
+
+// Legend pinned to the top-right of the chart area when one or both lines
+// are shown. Keeps both series labeled when their endpoint markers don't.
+function drawRateLegend(axis, { cons, resp }) {
+  const { colCenters, chartTop } = axis;
+  const items = [];
+  if (cons) items.push({ label: '% with consequence', color: '#c0392b' });
+  if (resp) items.push({ label: '% with response',    color: '#3a80b8' });
+  if (items.length === 0) return;
+
+  const lineLen = 18;
+  const gap     = 8;
+  const x       = colCenters[colCenters.length - 1] - 10;
+  let y = chartTop + 4;
+
   ctx.font = 'bold 11px sans-serif';
-  ctx.fillStyle = stroke;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
-  const firstSolid = points.find(p => !p.lag);
-  const lastSolid  = [...points].reverse().find(p => !p.lag);
-  if (firstSolid) ctx.fillText(`${Math.round(firstSolid.rate * 100)}%`, firstSolid.x, firstSolid.y - 6);
-  if (lastSolid && lastSolid !== firstSolid)
-    ctx.fillText(`${Math.round(lastSolid.rate * 100)}%`, lastSolid.x, lastSolid.y - 6);
-
-  // small caption next to the rightmost data point
-  const last = points[points.length - 1];
-  if (last && last.lag) {
-    ctx.font = '10px sans-serif';
-    ctx.fillStyle = '#999';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('reporting lag', last.x + 6, last.y + 6);
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (const it of items) {
+    ctx.fillStyle = it.color;
+    ctx.fillText(it.label, x - lineLen - 4, y);
+    ctx.strokeStyle = it.color;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x - lineLen, y);
+    ctx.lineTo(x,           y);
+    ctx.stroke();
+    y += 16;
   }
 }
 
 
 // --- Consequence Venn (State 2) -------------------------------------------
 
-function drawVennBackdrop() {
-  const v = VENN_LAYOUT;
+// function drawVennBackdrop() {
+//   const v = VENN_LAYOUT;
 
-  // No-consequence cluster — faint circle marking the boundary
-  outlineCircle(v.noConsequence, '#dddddd', 1);
+//   // No-consequence cluster — faint circle marking the boundary
+//   outlineCircle(v.noConsequence, '#dddddd', 1);
 
-  // Has-consequence container — big oval encompassing all sub-clusters
-  outlineEllipse(v.hasConsequence, '#bbbbbb', 1.5);
+//   // Has-consequence container — big oval encompassing all sub-clusters
+//   outlineEllipse(v.hasConsequence, '#bbbbbb', 1.5);
 
-  // Three Venn circles (top categories) — solid colored outlines
-  outlineCircle(v.venn.lit,  '#3a80b8', 2);
-  outlineCircle(v.venn.reg,  '#16a085', 2);
-  outlineCircle(v.venn.fine, '#e6a23c', 2);
+//   // Three Venn circles (top categories) — solid colored outlines
+//   outlineCircle(v.venn.lit,  '#3a80b8', 2);
+//   outlineCircle(v.venn.reg,  '#16a085', 2);
+//   outlineCircle(v.venn.fine, '#e6a23c', 2);
 
-  // Bridge (Lit + Police), dashed to read as "cross-category combo"
-  ctx.save();
-  ctx.setLineDash([4, 3]);
-  outlineCircle(v.bridge, '#888', 1.5);
-  ctx.restore();
+//   // Bridge (Lit + Police), dashed to read as "cross-category combo"
+//   ctx.save();
+//   ctx.setLineDash([4, 3]);
+//   outlineCircle(v.bridge, '#888', 1.5);
+//   ctx.restore();
 
-  // Side clusters and Other: NO background outlines. The dot clusters
-  // themselves form the visual shape; only labels mark them.
-}
+//   // Side clusters and Other: NO background outlines. The dot clusters
+//   // themselves form the visual shape; only labels mark them.
+// }
 
-function outlineCircle(c, stroke, lineWidth) {
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = lineWidth;
-  ctx.beginPath();
-  ctx.arc(c.x, c.y, c.r, 0, 2 * Math.PI);
-  ctx.stroke();
-}
+// function outlineCircle(c, stroke, lineWidth) {
+//   ctx.strokeStyle = stroke;
+//   ctx.lineWidth = lineWidth;
+//   ctx.beginPath();
+//   ctx.arc(c.x, c.y, c.r, 0, 2 * Math.PI);
+//   ctx.stroke();
+// }
 
-function outlineEllipse(c, stroke, lineWidth) {
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = lineWidth;
-  ctx.beginPath();
-  ctx.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, 2 * Math.PI);
-  ctx.stroke();
-}
+// function outlineEllipse(c, stroke, lineWidth) {
+//   ctx.strokeStyle = stroke;
+//   ctx.lineWidth = lineWidth;
+//   ctx.beginPath();
+//   ctx.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, 2 * Math.PI);
+//   ctx.stroke();
+// }
 
-function drawVennLabels() {
-  const v = VENN_LAYOUT;
+// function drawVennLabels() {
+//   const v = VENN_LAYOUT;
 
-  ctx.textBaseline = 'middle';
+//   ctx.textBaseline = 'middle';
 
-  // No-consequence header above its cluster
-  labelHeader(v.noConsequence.x, v.noConsequence.y - v.noConsequence.r - 18,
-              v.noConsequence.label, `${v.noConsequence.count} incidents`, '#555');
+//   // No-consequence header above its cluster
+//   labelHeader(v.noConsequence.x, v.noConsequence.y - v.noConsequence.r - 18,
+//               v.noConsequence.label, `${v.noConsequence.count} incidents`, '#555');
 
-  // Has-consequence header above the oval
-  labelHeader(v.hasConsequence.x, v.hasConsequence.y - v.hasConsequence.ry - 18,
-              v.hasConsequence.label, `${v.hasConsequence.count} incidents`, '#444');
+//   // Has-consequence header above the oval
+//   labelHeader(v.hasConsequence.x, v.hasConsequence.y - v.hasConsequence.ry - 18,
+//               v.hasConsequence.label, `${v.hasConsequence.count} incidents`, '#444');
 
-  // Venn category labels — outside each circle, away from neighbors
-  labelOffset(v.venn.lit,  -1, -1, 'Litigation',               `${v.venn.lit.count}`,  '#3a80b8');
-  labelOffset(v.venn.reg,   1, -1, 'Regulatory investigation', `${v.venn.reg.count}`, '#16a085');
-  labelOffset(v.venn.fine,  0,  1, 'Fine / settlement',        `${v.venn.fine.count}`, '#e6a23c');
+//   // Venn category labels — outside each circle, away from neighbors
+//   labelOffset(v.venn.lit,  -1, -1, 'Litigation',               `${v.venn.lit.count}`,  '#3a80b8');
+//   labelOffset(v.venn.reg,   1, -1, 'Regulatory investigation', `${v.venn.reg.count}`, '#16a085');
+//   labelOffset(v.venn.fine,  0,  1, 'Fine / settlement',        `${v.venn.fine.count}`, '#e6a23c');
 
-  // Bridge label above
-  labelOffset(v.bridge, 0, -1, 'Lit + Police', `${v.bridge.count}`, '#666');
+//   // Bridge label above
+//   labelOffset(v.bridge, 0, -1, 'Lit + Police', `${v.bridge.count}`, '#666');
 
-  // Side clusters — labels to the right of each
-  v.sides.forEach(s => {
-    const labelX = s.target.x + s.r + 8;
-    const labelY = s.target.y;
-    ctx.textAlign = 'left';
-    ctx.font = '11px sans-serif';
-    ctx.fillStyle = '#444';
-    ctx.fillText(s.label, labelX, labelY - 4);
-    ctx.font = '10px sans-serif';
-    ctx.fillStyle = '#888';
-    ctx.fillText(`${s.count}`, labelX, labelY + 8);
-  });
+//   // Side clusters — labels to the right of each
+//   v.sides.forEach(s => {
+//     const labelX = s.target.x + s.r + 8;
+//     const labelY = s.target.y;
+//     ctx.textAlign = 'left';
+//     ctx.font = '11px sans-serif';
+//     ctx.fillStyle = '#444';
+//     ctx.fillText(s.label, labelX, labelY - 4);
+//     ctx.font = '10px sans-serif';
+//     ctx.fillStyle = '#888';
+//     ctx.fillText(`${s.count}`, labelX, labelY + 8);
+//   });
 
-  // Other — small label below cluster
-  ctx.textAlign = 'center';
-  ctx.font = '11px sans-serif';
-  ctx.fillStyle = '#666';
-  ctx.fillText(v.other.label, v.other.x, v.other.y + v.other.r + 12);
-  ctx.font = '10px sans-serif';
-  ctx.fillStyle = '#888';
-  ctx.fillText(`~${v.other.count}`, v.other.x, v.other.y + v.other.r + 25);
-}
+//   // Other — small label below cluster
+//   ctx.textAlign = 'center';
+//   ctx.font = '11px sans-serif';
+//   ctx.fillStyle = '#666';
+//   ctx.fillText(v.other.label, v.other.x, v.other.y + v.other.r + 12);
+//   ctx.font = '10px sans-serif';
+//   ctx.fillStyle = '#888';
+//   ctx.fillText(`~${v.other.count}`, v.other.x, v.other.y + v.other.r + 25);
+// }
 
-function labelHeader(x, y, title, sub, colour) {
-  ctx.textAlign = 'center';
-  ctx.fillStyle = colour;
-  ctx.font = 'bold 14px sans-serif';
-  ctx.fillText(title, x, y);
-  ctx.font = '11px sans-serif';
-  ctx.fillStyle = '#888';
-  ctx.fillText(sub, x, y + 14);
-}
+// function labelHeader(x, y, title, sub, colour) {
+//   ctx.textAlign = 'center';
+//   ctx.fillStyle = colour;
+//   ctx.font = 'bold 14px sans-serif';
+//   ctx.fillText(title, x, y);
+//   ctx.font = '11px sans-serif';
+//   ctx.fillStyle = '#888';
+//   ctx.fillText(sub, x, y + 14);
+// }
 
-// Label placed offset from a circle in direction (dx, dy) where each is -1/0/1
-function labelOffset(c, dx, dy, title, sub, colour) {
-  const offsetMag = c.r + 16;
-  const x = c.x + dx * offsetMag;
-  const y = c.y + dy * offsetMag;
-  ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
-  ctx.fillStyle = colour;
-  ctx.font = 'bold 12px sans-serif';
-  ctx.fillText(title, x, y);
-  ctx.fillStyle = '#888';
-  ctx.font = '10px sans-serif';
-  ctx.fillText(sub, x, y + 12);
-}
+// // Label placed offset from a circle in direction (dx, dy) where each is -1/0/1
+// function labelOffset(c, dx, dy, title, sub, colour) {
+//   const offsetMag = c.r + 16;
+//   const x = c.x + dx * offsetMag;
+//   const y = c.y + dy * offsetMag;
+//   ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+//   ctx.fillStyle = colour;
+//   ctx.font = 'bold 12px sans-serif';
+//   ctx.fillText(title, x, y);
+//   ctx.fillStyle = '#888';
+//   ctx.font = '10px sans-serif';
+//   ctx.fillText(sub, x, y + 12);
+// }
 
-function drawVennDisclaimer() {
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.font = '10px sans-serif';
-  ctx.fillStyle = '#888';
-  const lines = [
-    'Note: 36 incidents in the Venn also carry a less-common consequence (e.g. Incarceration, Legal warning)',
-    'not shown — they\'re placed by their highest-frequency partner. The same applies to the long-tail "Other" cluster.',
-  ];
-  lines.forEach((line, i) => ctx.fillText(line, 20, height - 30 + i * 12));
-}
+// function drawVennDisclaimer() {
+//   ctx.textAlign = 'left';
+//   ctx.textBaseline = 'top';
+//   ctx.font = '10px sans-serif';
+//   ctx.fillStyle = '#888';
+//   const lines = [
+//     'Note: 36 incidents in the Venn also carry a less-common consequence (e.g. Incarceration, Legal warning)',
+//     'not shown — they\'re placed by their highest-frequency partner. The same applies to the long-tail "Other" cluster.',
+//   ];
+//   lines.forEach((line, i) => ctx.fillText(line, 20, height - 30 + i * 12));
+// }
 
 
 // --- Response bubbles (State 3) -------------------------------------------
 
-function drawResponseBackdrop() {
-  const r = RESPONSE_LAYOUT;
+// function drawResponseBackdrop() {
+//   const r = RESPONSE_LAYOUT;
 
-  // Two no-response clusters (faint)
-  outlineCircle(r.noRespNoCons,  '#dddddd', 1);
-  outlineCircle(r.noRespHasCons, '#dddddd', 1);
+//   // Two no-response clusters (faint)
+//   outlineCircle(r.noRespNoCons,  '#dddddd', 1);
+//   outlineCircle(r.noRespHasCons, '#dddddd', 1);
 
-  // Has-response container oval
-  outlineEllipse(r.hasResponse, '#bbbbbb', 1.5);
-}
+//   // Has-response container oval
+//   outlineEllipse(r.hasResponse, '#bbbbbb', 1.5);
+// }
 
-function drawResponseLabels() {
-  const r = RESPONSE_LAYOUT;
+// function drawResponseLabels() {
+//   const r = RESPONSE_LAYOUT;
 
-  ctx.textBaseline = 'middle';
+//   ctx.textBaseline = 'middle';
 
-  // Each of the three top-level groups gets a header above its outline.
-  noRespHeader(r.noRespNoCons);
-  noRespHeader(r.noRespHasCons);
+//   // Each of the three top-level groups gets a header above its outline.
+//   noRespHeader(r.noRespNoCons);
+//   noRespHeader(r.noRespHasCons);
 
-  labelHeader(r.hasResponse.x, r.hasResponse.y - r.hasResponse.ry - 18,
-              r.hasResponse.label, `${r.hasResponse.count} incidents`, '#444');
+//   labelHeader(r.hasResponse.x, r.hasResponse.y - r.hasResponse.ry - 18,
+//               r.hasResponse.label, `${r.hasResponse.count} incidents`, '#444');
 
-  // Each response bucket — label to the right of the cluster.
-  r.buckets.forEach(b => {
-    const labelX = b.target.x + b.r + 8;
-    const labelY = b.target.y;
-    ctx.textAlign = 'left';
-    ctx.font = '11px sans-serif';
-    ctx.fillStyle = '#444';
-    ctx.fillText(b.label, labelX, labelY - 4);
-    ctx.font = '10px sans-serif';
-    ctx.fillStyle = '#888';
-    ctx.fillText(`${b.count}`, labelX, labelY + 8);
-  });
-}
+//   // Each response bucket — label to the right of the cluster.
+//   r.buckets.forEach(b => {
+//     const labelX = b.target.x + b.r + 8;
+//     const labelY = b.target.y;
+//     ctx.textAlign = 'left';
+//     ctx.font = '11px sans-serif';
+//     ctx.fillStyle = '#444';
+//     ctx.fillText(b.label, labelX, labelY - 4);
+//     ctx.font = '10px sans-serif';
+//     ctx.fillStyle = '#888';
+//     ctx.fillText(`${b.count}`, labelX, labelY + 8);
+//   });
+// }
 
-function noRespHeader(c) {
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#555';
-  ctx.font = 'bold 13px sans-serif';
-  ctx.fillText(c.label, c.x, c.y - c.r - 24);
-  ctx.font = '11px sans-serif';
-  ctx.fillStyle = '#888';
-  ctx.fillText(c.sublabel, c.x, c.y - c.r - 10);
-  ctx.font = '10px sans-serif';
-  ctx.fillText(`${c.count} incidents`, c.x, c.y - c.r + 2);
-}
+// function noRespHeader(c) {
+//   ctx.textAlign = 'center';
+//   ctx.fillStyle = '#555';
+//   ctx.font = 'bold 13px sans-serif';
+//   ctx.fillText(c.label, c.x, c.y - c.r - 24);
+//   ctx.font = '11px sans-serif';
+//   ctx.fillStyle = '#888';
+//   ctx.fillText(c.sublabel, c.x, c.y - c.r - 10);
+//   ctx.font = '10px sans-serif';
+//   ctx.fillText(`${c.count} incidents`, c.x, c.y - c.r + 2);
+// }
 
-function drawResponseDisclaimer() {
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.font = '10px sans-serif';
-  ctx.fillStyle = '#888';
-  const lines = [
-    'Note: 22 incidents have multiple response types coded. They\'re placed by their highest-frequency response;',
-    'the secondary tag isn\'t shown. The "Policy / apology" bucket merges Policy review/update, Policy update, and Public apology.',
-  ];
-  lines.forEach((line, i) => ctx.fillText(line, 20, height - 30 + i * 12));
-}
+// function drawResponseDisclaimer() {
+//   ctx.textAlign = 'left';
+//   ctx.textBaseline = 'top';
+//   ctx.font = '10px sans-serif';
+//   ctx.fillStyle = '#888';
+//   const lines = [
+//     'Note: 22 incidents have multiple response types coded. They\'re placed by their highest-frequency response;',
+//     'the secondary tag isn\'t shown. The "Policy / apology" bucket merges Policy review/update, Policy update, and Public apology.',
+//   ];
+//   lines.forEach((line, i) => ctx.fillText(line, 20, height - 30 + i * 12));
+// }
 
 
 function drawYearAxis() {
@@ -529,6 +581,8 @@ function drawYearAxis() {
 
 // --- Quadrant Act (Scenes Q1–Q5) ------------------------------------------
 
+
+
 // Dividers + axis edge labels. faded=true draws the same grid at low alpha
 // for Q3/Q4 breakdowns, where the grid is just a reminder of the source.
 function drawQuadrantBackdrop({ faded = false } = {}) {
@@ -546,22 +600,6 @@ function drawQuadrantBackdrop({ faded = false } = {}) {
   ctx.stroke();
   ctx.restore();
 
-  // Axis edge labels — "← No consequence | Has consequence →" and same for response
-  if (faded) return;
-  ctx.fillStyle = '#888';
-  ctx.font = '11px sans-serif';
-  ctx.textBaseline = 'middle';
-
-  // X-axis (consequence) — labels just below the horizontal divider
-  ctx.textAlign = 'right';
-  ctx.fillText('← No consequence', dx - 10, dy + 14);
-  ctx.textAlign = 'left';
-  ctx.fillText('Has consequence →', dx + 10, dy + 14);
-
-  // Y-axis (response) — labels just right of the vertical divider
-  ctx.textAlign = 'left';
-  ctx.fillText('↑ Has response', dx + 8, dy - 12);
-  ctx.fillText('↓ No response',  dx + 8, dy + 30);
 }
 
 function drawQuadrantLabels() {
@@ -654,28 +692,124 @@ function drawQuadrantTechAnnotations() {
   }
 }
 
+// --- Tech-filter harm overlay (top-left of timeline view) -----------------
+// Cached: topHarmTagsForTech and the matching/total counts walk every node,
+// so we compute once per tech filter and reuse on subsequent ticks.
+const harmTagCache = new Map();
+function harmStatsCached(nodes, flag) {
+  if (!harmTagCache.has(flag)) {
+    const matching = nodes.reduce((n, d) => n + (d[flag] ? 1 : 0), 0);
+    harmTagCache.set(flag, {
+      bars:     topHarmTagsForTech(nodes, flag, 8),
+      matching,
+      total:    nodes.length,
+    });
+  }
+  return harmTagCache.get(flag);
+}
+
+function drawTechHarmOverlay(nodes, techFilterId) {
+  const filter = TECH_FILTER_BY_ID[techFilterId];
+  if (!filter) return;
+  const stats = harmStatsCached(nodes, filter.flag);
+  const bars = stats.bars;
+  if (bars.length === 0) return;
+
+  // Overlay rect in top-left corner of canvas.
+  const PAD     = 12;
+  const ORIGIN  = { x: 16, y: 26 };
+  const BAR_H   = 14;
+  const BAR_GAP = 5;
+  const LABEL_W = 150;          // label column on the left of each bar
+  const BAR_MAX = 110;          // max bar width in px
+  const COUNT_W = 30;           // count number on the right
+
+  const titleH  = 32;   // title + matching/total count subline
+  const rowH    = BAR_H + BAR_GAP;
+  const boxW    = LABEL_W + BAR_MAX + COUNT_W + PAD * 2;
+  const boxH    = titleH + bars.length * rowH + PAD;
+
+  // Semi-transparent backdrop so dimmed dots show through faintly.
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+  ctx.lineWidth = 1;
+  ctx.fillRect(ORIGIN.x, ORIGIN.y, boxW, boxH);
+  ctx.strokeRect(ORIGIN.x, ORIGIN.y, boxW, boxH);
+
+  // Title
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = filter.color;
+  ctx.fillText(`Top harms — ${filter.label}`, ORIGIN.x + PAD, ORIGIN.y + PAD - 4);
+
+  // Matching / total count — makes it explicit that the full corpus is on canvas
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#666';
+  const pct = (stats.matching / stats.total * 100).toFixed(0);
+  ctx.fillText(`${stats.matching} matching · ${stats.total} total (${pct}%)`,
+               ORIGIN.x + PAD, ORIGIN.y + PAD + 10);
+
+  // Bars: largest at top (descending), notebook draws ascending bottom-up,
+  // here we put largest at top since the eye lands there first in an overlay.
+  const maxCount = bars[0].count;
+  const barsX0   = ORIGIN.x + PAD + LABEL_W;
+
+  bars.forEach((b, i) => {
+    const y = ORIGIN.y + PAD + titleH + i * rowH;
+
+    // Label (right-aligned against the bar start)
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#444';
+    ctx.fillText(truncate(b.tag, 26), barsX0 - 6, y + BAR_H / 2);
+
+    // Bar
+    const w = (b.count / maxCount) * BAR_MAX;
+    ctx.fillStyle = filter.color;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(barsX0, y, w, BAR_H);
+    ctx.globalAlpha = 1;
+
+    // Count
+    ctx.textAlign = 'left';
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText(String(b.count), barsX0 + w + 4, y + BAR_H / 2);
+  });
+
+  ctx.restore();
+}
+
+function truncate(s, max) {
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + '…';
+}
+
+
 // Horizontal axis line under the bars, mirroring the timeline's year axis.
-function drawBreakdownBaseline() {
+function drawVerticalBarBaseline() {
   ctx.strokeStyle = '#bbb';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(60, BREAKDOWN_BASELINE_Y + 2);
-  ctx.lineTo(width - 30, BREAKDOWN_BASELINE_Y + 2);
+  ctx.moveTo(60, VERTICAL_BAR_BASELINE_Y + 2);
+  ctx.lineTo(width - 30, VERTICAL_BAR_BASELINE_Y + 2);
   ctx.stroke();
 }
 
-// Scene Q3 / Q4: category labels under each bar, like the timeline year axis.
-// Labels stagger vertically every other one so longer labels don't overlap.
-function drawBreakdownLabels(order, targets, sectionTitle, sectionSub) {
+// Scene Q4: category labels under each bar, like the timeline year axis.
+function drawVerticalBarLabels(order, targets, sectionTitle, sectionSub) {
   // Section header (top-left)
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = '#444';
   ctx.font = 'bold 13px sans-serif';
-  ctx.fillText(sectionTitle, 20, 20);
+  // ctx.fillText(sectionTitle, 20, 20);
   ctx.fillStyle = '#888';
   ctx.font = '11px sans-serif';
-  ctx.fillText(sectionSub, 20, 38);
+  // ctx.fillText(sectionSub, 20, 38);
 
   // Per-bar labels below the baseline. Stagger every other one ~12px lower
   // to avoid horizontal collisions on the longer labels.
@@ -684,7 +818,7 @@ function drawBreakdownLabels(order, targets, sectionTitle, sectionSub) {
   order.forEach((id, i) => {
     const t = targets[id];
     if (!t) return;
-    const labelY = BREAKDOWN_BASELINE_Y + 10 + (i % 2) * 14;
+    const labelY = VERTICAL_BAR_BASELINE_Y + 10 + (i % 2) * 14;
     ctx.font = '11px sans-serif';
     ctx.fillStyle = '#444';
     ctx.fillText(t.label, t.x, labelY);
@@ -696,4 +830,55 @@ function drawBreakdownLabels(order, targets, sectionTitle, sectionSub) {
   ctx.fillStyle = '#888';
   ctx.fillText('Dots placed by primary (highest-priority) tag, then sorted by tech bucket so colors band horizontally — matching the timeline view.',
                20, height - 14);
+}
+
+
+
+// Vertical axis line at x = HORIZONTAL_BAR_LEFT_X — bars extend to its right,
+// category labels sit on its left.
+function drawHorizontalBarBaseline() {
+  ctx.strokeStyle = '#bbb';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(HORIZONTAL_BAR_LEFT_X, 40);
+  ctx.lineTo(HORIZONTAL_BAR_LEFT_X, height - 40);
+  ctx.stroke();
+}
+
+// Scene Q3: category labels beside each bar
+function drawHorizontalBarLabels(order, targets, sectionTitle, sectionSub) {
+  // Section header (top-left)
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#444';
+  ctx.font = 'bold 13px sans-serif';
+  // ctx.fillText(sectionTitle, 20, 20);
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  // ctx.fillText(sectionSub, 20, 38);
+
+  // Per-bar labels below the baseline. Stagger every other one ~12px lower
+  // to avoid horizontal collisions on the longer labels.
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  // order.forEach((id, i) => {
+  //   const t = targets[id];
+  //   if (!t) return;
+  //   const labelY = BREAKDOWN_BASELINE_Y + 10 + (i % 2) * 14;
+  //   ctx.font = '11px sans-serif';
+  //   ctx.fillStyle = '#444';
+  order.forEach((id) => {
+      const t = targets[id];                                                    
+      if (!t) return;                                       
+      ctx.fillText(t.label, HORIZONTAL_BAR_LEFT_X - 8, t.y);                    
+    })
+    // ctx.fillText(t.label, t.x, labelY);
+
+
+  // Disclaimer
+  // ctx.textAlign = 'left';
+  // ctx.font = '10px sans-serif';
+  // ctx.fillStyle = '#888';
+  // ctx.fillText('Dots placed by primary (highest-priority) tag, then sorted by tech bucket so colors band horizontally — matching the timeline view.',
+  //              20, height - 14);
 }

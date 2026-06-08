@@ -8,7 +8,7 @@ export const center = { x: width / 2, y: height / 2 };
 // Default dot radius for 'all' / 'split' views.
 // Set to 5 (Option B from website/mockup.html) so the radius animation
 // to timelineRadius (2.5) is a 2× shrink rather than 3.2×.
-export const defaultRadius = 5;
+export const defaultRadius = 3;
 
 // two clusters for aiaaic accountability split
 export const splitCenters = {
@@ -29,24 +29,11 @@ export const splitLabels = {
 // At pitch=6 across 19 year columns with the margins below, per-year capacity
 // is ~486, which fits the busiest year (404 in 2024) with headroom.
 export const timelineMargin = { top: 60, right: 40, bottom: 45, left: 60 };
-export const timelineRadius = 2.5;
-export const timelineDotPitch = 6;
+export const timelineRadius = 3;
+export const timelineDotPitch = 7;
 
 // Consequence Venn (State 2): dots small enough that 6-dot sub-clusters
 // still read as discrete clusters, large enough to be visible vs the
 // background circle outlines.
 export const vennRadius = 3.5;
 
-
-// //  examplar data splits 
-// export const yearCenters = {
-//   2008: { x: width / 3,     y: height / 2 },
-//   2009: { x: width / 2,     y: height / 2 },
-//   2010: { x: 2 * width / 3, y: height / 2 }
-// };
-
-// export const yearsTitleX = {
-//   2008: 160,
-//   2009: width / 2,
-//   2010: width - 160
-// };
