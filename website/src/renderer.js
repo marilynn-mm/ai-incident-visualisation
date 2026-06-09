@@ -189,10 +189,16 @@ export function getHoveredNode(mouseX, mouseY, nodes) {
 }
 
 export function toCanvasCoords(event) {
+  // Bridge CSS size → internal coordinate space. The canvas's drawing
+  // coordinates run 0..width, 0..height regardless of how the browser
+  // sizes the element via CSS — divide out the difference so hover lands
+  // on the visually-correct dot even when the canvas is scaled.
   const rect = canvas.getBoundingClientRect();
+  const scaleX = width  / rect.width;
+  const scaleY = height / rect.height;
   return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top)  * scaleY
   };
 }
 
