@@ -14,7 +14,7 @@
  */
 
 import { loadData, createNodes } from './data.js';
-import { setupSimulation, groupBubbles, timelineLayout, fatalSpotlightLayout, quadrantLayout, consequenceBreakdownLayout, responseBreakdownLayout } from './simulation.js';
+import { setupSimulation, groupBubbles, timelineLayout, fatalSpotlightLayout, quadrantLayout, consequenceBreakdownLayout, responseBreakdownLayout, floatingParticlesLayout } from './simulation.js';
 import { initCanvas, drawFrame, getHoveredNode, toCanvasCoords } from './renderer.js';
 import { TECH_BUCKET_ORDER, TECH_BUCKET_LABELS, TECH_BUCKET_COLORS } from './tech_buckets.js';
 import { SCENES } from './narrative.js';
@@ -110,7 +110,8 @@ function goToScene(idx) {
 
 function applySceneLayout(scene) {
   const id = layoutIdFor(scene);
-  if (id === 'all')                    groupBubbles();
+  if (id === 'particles')              floatingParticlesLayout();
+  else if (id === 'all')               groupBubbles();
   // else if (id === 'split')             splitByResponse();
   else if (id === 'tl-fatal')          fatalSpotlightLayout();
   else if (id === 'timeline')          timelineLayout();
@@ -131,8 +132,8 @@ function renderScene() {
   const next  = document.querySelector('#scene-next');
   const legend = document.querySelector('#legend');
 
-  if (indicator) indicator.textContent =
-    `Scene ${currentSceneIdx + 1} of ${SCENES.length}`;
+  // if (indicator) indicator.textContent =
+  //   `Scene ${currentSceneIdx + 1} of ${SCENES.length}`;
   if (title) title.textContent = scene.title;
   if (body)  body.textContent  = scene.body;
   if (prev)  prev.disabled = currentSceneIdx === 0;

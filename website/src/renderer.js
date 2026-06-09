@@ -122,38 +122,44 @@ function drawDots(nodes, currentView, hints, { showLine, showFatal }) {
     ctx.arc(d.x, d.y, d.radius, 0, 2 * Math.PI);
     ctx.fillStyle = colour;
     ctx.fill();
-    // Stroke only the larger dots — at radius ≤ 3 the 1px stroke takes
-    // up too much of the dot and reads as a ring rather than a darker edge.
-    if (d.radius > 3) {
-      ctx.strokeStyle = d3.color(colour).darker().toString();
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
   });
   ctx.globalAlpha = 1;
 }
 
 // Headline annotation above the 2025 column.
-function drawFatalCaption() {
-  const axis = getYearAxis();
-  if (!axis) return;
-  const { columnLabels, colCenters, chartTop } = axis;
+  function drawFatalCaption() {                                                                                  
+    ctx.textAlign = 'left';      // was 'center'                                                                 
+    ctx.textBaseline = 'top';    // was 'bottom'
+                                                                                                                 
+    ctx.font = 'bold 13px sans-serif';                      
+    ctx.fillStyle = '#a01818';                                                                                   
+    ctx.fillText('25 fatalities in 2025', 28, 34);     // matches harm overlay's title position
+                                                                                                                 
+    ctx.font = '11px sans-serif';                           
+    ctx.fillStyle = '#777';                                                                                      
+    ctx.fillText('highest on record', 28, 50);         // 16 px below, matches harm subline
+  }
+  
+// function drawFatalCaption() {
+//   const axis = getYearAxis();
+//   if (!axis) return;
+//   const { columnLabels, colCenters, chartTop } = axis;
 
-  const idx = columnLabels.findIndex(l => l === '2025');
-  if (idx < 0) return;
-  const x = colCenters[idx];
+//   const idx = columnLabels.findIndex(l => l === '2025');
+//   if (idx < 0) return;
+//   const x = colCenters[idx];
 
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
+//   ctx.textAlign = 'center';
+//   ctx.textBaseline = 'bottom';
 
-  ctx.font = 'bold 13px sans-serif';
-  ctx.fillStyle = '#a01818';
-  ctx.fillText('25 fatalities in 2025', x, chartTop - 20);
+//   ctx.font = 'bold 13px sans-serif';
+//   ctx.fillStyle = '#a01818';
+//   ctx.fillText('25 fatalities in 2025', x, chartTop - 20);
 
-  ctx.font = '11px sans-serif';
-  ctx.fillStyle = '#777';
-  ctx.fillText('highest on record', x, chartTop - 6);
-}
+//   ctx.font = '11px sans-serif';
+//   ctx.fillStyle = '#777';
+//   ctx.fillText('highest on record', x, chartTop - 6);
+// }
 
 // Dim dots outside the active era's year range. Undated rows have d.year=null
 // and never match an era, so they dim along with the rest of off-era columns.

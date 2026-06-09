@@ -5,8 +5,7 @@
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 import {
   width, height, center, splitCenters, forceStrength,
-  defaultRadius, timelineMargin, timelineRadius, timelineDotPitch,
-  vennRadius,
+  dotRadius, timelineMargin, timelineDotPitch,
 } from './constants.js';
 import { TECH_BUCKET_ORDER } from './tech_buckets.js';
 import { buildTargetMap } from './consequence_buckets.js';
@@ -28,43 +27,20 @@ function charge(d) {
   return -Math.pow(d.radius, 2.0) * forceStrength;
 }
 
-// Per-tick radius interpolator. View changes set d.targetRadius; this nudges
-// d.radius toward it at ~10% per tick so size changes animate smoothly
-// across the same simulation ticks that move the dots.
-function radiusTween() {
-  let nodes;
-  const tween = function() {
-    for (const d of nodes) {
-      if (d.targetRadius == null) continue;
-      const delta = d.targetRadius - d.radius;
-      if (Math.abs(delta) < 0.05) d.radius = d.targetRadius;
-      else d.radius += delta * 0.1;
-    }
-  };
-  tween.initialize = (ns) => { nodes = ns; };
-  return tween;
-}
-
 export function setupSimulation(nodes, onTick) {
-  nodes.forEach(d => { d.targetRadius = defaultRadius; });
-
   simulation = d3.forceSimulation(nodes)
     .velocityDecay(0.2)
     .force('x', d3.forceX().strength(forceStrength).x(center.x))
     .force('y', d3.forceY().strength(forceStrength).y(center.y))
     .force('charge', d3.forceManyBody().strength(charge))
-    .force('radius', radiusTween())
     .on('tick', onTick);
 
   simulation.stop();
 }
 
 function restoreFreeForm() {
-  // restore charge and damping; radius animates back to defaultRadius via
-  // the radius tween rather than snapping
-  // cluster size determined by forceManyBody (repulsion pushing nodes away from each other)
-  //    and forceX / forceY (centering attraction pulling nodes toward the center point) 
-  simulation.nodes().forEach(d => { d.targetRadius = defaultRadius; });
+  // cluster size determined by forceManyBody (repulsion pushing nodes apart)
+  //    and forceX / forceY (centering attraction pulling nodes toward center)
   simulation.force('charge', d3.forceManyBody().strength(charge));
   simulation.force('y', d3.forceY().strength(forceStrength).y(center.y));
   simulation.velocityDecay(0.2);
@@ -73,7 +49,30 @@ function restoreFreeForm() {
 export function groupBubbles() {
   restoreFreeForm();
   simulation.force('x', d3.forceX().strength(forceStrength).x(center.x));
-  simulation.alpha(1).restart();
+  simulation.alphaTarget(0).alpha(1).restart();
+}
+
+// Floating particle field — a perpetual gentle drift across the canvas with
+// no clustering forces. Used as the opening "ambient" scene before any
+// narrative starts. alphaTarget keeps the simulation running indefinitely
+// so the motion never settles; other layouts reset it back to 0.
+export function floatingParticlesLayout() {
+  const nodes = simulation.nodes();
+  nodes.forEach(d => {
+    const rand = () => (Math.random() + Math.random() + Math.random()) / 2;
+    d.x = rand() * width;                                                                                          
+    d.y = rand() * height;
+    // d.x  = Math.random() * width;
+    // d.y  = Math.random() * height;
+    d.vx = (Math.random() - 0.5) * 2;
+    d.vy = (Math.random() - 0.5) * 2;
+  });
+  // No centering pull, very weak repulsion so dots don't bunch up.
+  simulation.force('charge', d3.forceManyBody().strength(-0.5));
+  simulation.force('x', d3.forceX().strength(0.003).x(width / 2));
+  simulation.force('y', d3.forceY().strength(0.003).y(height / 2));
+  simulation.velocityDecay(0.3);
+  simulation.alphaTarget(0.01).alpha(1).restart();
 }
 
 // export function splitByResponse() {
@@ -112,7 +111,6 @@ export function quadrantLayout() {
   nodes.forEach(d => {
     d.tx = d.quadrantTx;
     d.ty = d.quadrantTy;
-    d.targetRadius = timelineRadius;
   });
   applyTimelineForces();
 }
@@ -128,7 +126,6 @@ export function consequenceBreakdownLayout() {
       d.tx = d.quadrantTx;
       d.ty = d.quadrantTy;
     }
-    d.targetRadius = timelineRadius;
   }
   applyTimelineForces();
 }
@@ -143,7 +140,6 @@ export function responseBreakdownLayout() {
       d.tx = d.quadrantTx;
       d.ty = d.quadrantTy;
     }
-    d.targetRadius = timelineRadius;
   }
   applyTimelineForces();
 }
@@ -179,7 +175,7 @@ function computeVerticalBarTargets(activeNodes, categoryKey, targets) {
       const subCol = i % subCols;
       const offset = (subCol - (subCols - 1) / 2) * pitch;
       node.tx = target.x + offset;
-      node.ty = baseY - row * pitch - timelineRadius;
+      node.ty = baseY - row * pitch - dotRadius;
     });
   });
 }
@@ -215,7 +211,7 @@ function computeHorizontalBarTargets(activeNodes, categoryKey, targets) {
       const col    = Math.floor(i / subRows);
       const subRow = i % subRows;
       const offset = (subRow - (subRows - 1) / 2) * pitch;
-      node.tx = baseX + col * pitch + timelineRadius;
+      node.tx = baseX + col * pitch + dotRadius;
       node.ty = target.y + offset;
     });
   });
@@ -242,13 +238,12 @@ function applyRegionForces(targets, regionKey) {
     const t = targets.get(regionKey(d)) || { x: 470, y: 300 };
     d.tx = t.x;
     d.ty = t.y;
-    d.targetRadius = vennRadius;
   });
   simulation.force('charge', d3.forceManyBody().strength(d => -Math.pow(d.radius, 2) * 0.04));
   simulation.force('x', d3.forceX().strength(0.08).x(d => d.tx));
   simulation.force('y', d3.forceY().strength(0.08).y(d => d.ty));
   simulation.velocityDecay(0.3);
-  simulation.alpha(1).restart();
+  simulation.alphaTarget(0).alpha(1).restart();
 }
 
 /*
@@ -280,18 +275,14 @@ export function fatalSpotlightLayout() {
 
 // Smooth entry: no positional snap. Dots ease from their current
 // positions (cluster centre, accountability split, etc.) directly to
-// (tx, ty), while the radius tween shrinks them from defaultRadius to
-// timelineRadius over the same ticks. Equal x and y strengths so the
-// motion reads as a coherent settle rather than a horizontal blast
-// followed by vertical drift.
+// (tx, ty). Equal x and y strengths so the motion reads as a coherent
+// settle rather than a horizontal blast followed by vertical drift.
 function applyTimelineForces() {
-  const nodes = simulation.nodes();
-  nodes.forEach(d => { d.targetRadius = timelineRadius; });
   simulation.force('charge', null);
   simulation.force('x', d3.forceX().strength(0.05).x(d => d.tx));
   simulation.force('y', d3.forceY().strength(0.05).y(d => d.ty));
   simulation.velocityDecay(0.25);
-  simulation.alpha(1).restart();
+  simulation.alphaTarget(0).alpha(1).restart();
 }
 
 export function getYearAxis() {
@@ -358,7 +349,7 @@ function computeTimelineTargets(nodes, opts = {}) {
       const subCol = i % colsPerYear;
       const offset = (subCol - (colsPerYear - 1) / 2) * timelineDotPitch;
       node.tx = centerX + offset;
-      node.ty = chartBottom - row * timelineDotPitch - timelineRadius;
+      node.ty = chartBottom - row * timelineDotPitch - dotRadius;
     });
   });
 

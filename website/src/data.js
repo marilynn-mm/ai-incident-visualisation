@@ -16,7 +16,7 @@ import { primaryTech } from './tech_buckets.js';
 import { consequenceRegion } from './consequence_buckets.js';
 import { responseRegion } from './response_buckets.js';
 import { quadrantOf, primaryConsequence, primaryResponse } from './quadrant_buckets.js';
-import { defaultRadius } from './constants.js';
+import { dotRadius } from './constants.js';
 
 export function loadData(callback) {
   d3.csv('data/aiaaic_cleaned.csv', function(d) {
@@ -36,7 +36,7 @@ export function createNodes(rawData) {
 
   const myNodes = filtered.map(d => ({
     id:          d.aiaaic_id,
-    radius:      defaultRadius,            // starting radius; tween adjusts per view
+    radius:      dotRadius,                // fixed for every view
     value:       1,
     name:        d.headline,
     org:         d.deployer,

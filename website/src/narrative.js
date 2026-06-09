@@ -14,6 +14,12 @@
 
 export const SCENES = [
   {
+    id: 'particles',
+    view: 'particles',
+    title: '',
+    body: '',
+  },
+  {
     id: 'cluster',
     view: 'all',
     title: 'Over 2,200 documented AI incidents',
